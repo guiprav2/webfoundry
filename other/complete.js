@@ -54,6 +54,7 @@ export default async function complete(logs, { model, apiKey, n, rolemap, tools,
         .filter(xs => typeof xs[1] === 'function' ? xs[1]() : xs[1])
         .map(([name, spec]) => ({ type: 'function', name, parameters: {}, ...(typeof spec === 'function' ? spec() : spec), handler: undefined }))
         .map(spec => resolve(spec));
+      //console.log(ctools.filter(x => x.parameters?.properties?.path?.enum).map(x => `- ${x.name}: ${x.parameters.properties.path.enum.filter(x => !x.startsWith('webfoundry/') && !x.endsWith('/.keep')).join(' | ')}`).join('\n'));
       for (let x of ctools) {
         x.parameters.type ??= 'object';
         x.parameters.properties ??= {};
@@ -76,7 +77,8 @@ export default async function complete(logs, { model, apiKey, n, rolemap, tools,
       res.output = await Promise.all(res.output.map(async x => {
         if (x.type !== 'function_call') return x;
         x.arguments = JSON.parse(x.arguments);
-        let handler = tools[x.name].handler;
+        let tool = typeof tools[x.name] === 'function' ? tools[x.name]() : tools[x.name];
+        let handler = tool.handler;
         console.log('calling:', x.name, x.arguments);
         if (!handler) return x;
         let result = await handler(x.arguments);
@@ -185,9 +187,10 @@ export default async function complete(logs, { model, apiKey, n, rolemap, tools,
           x.message.tool_calls = await Promise.all(x.message.tool_calls.map(async y => {
             if (y.type !== 'function') return y;
             y.function.arguments = JSON.parse(y.function.arguments);
-            y.function.arguments.reason = x.message.content;
-            let handler = tools[y.function.name].handler;
-            //console.log('calling:', y.function.name, y.function.arguments);
+            //y.function.arguments.reason = x.message.content;
+            let tool = typeof tools[y.function.name] === 'function' ? tools[y.function.name]() : tools[y.function.name];
+            let handler = tool.handler;
+            console.log('calling:', y.function.name, y.function.arguments);
             let result = handler ? await handler(y.function.arguments) : y.function.arguments;
             if (result != null) y.function.result = result;
             fncall = true;

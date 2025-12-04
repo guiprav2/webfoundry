@@ -51,6 +51,7 @@ export default class Assistant {
         await new Promise((pres, prej) => meSpeak.loadVoice('voices/en/en-us.json', success => success ? pres() : prej(new Error(`Could not load meSpeak voice`))));
         this.state.session = await autoassist({
           endpoint: 'https://kittygpt.netlify.app/.netlify/functions/voicechat',
+          model: 'gpt-realtime-2025-08-28',
           navdisable: true,
           idtrack: true,
           removeInvisible: false,

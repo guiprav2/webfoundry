@@ -10,6 +10,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * Always use `let`, never `const`.
 * Ignore webfoundry/{scripts,templates}.json, they're fully managed by Webfoundry.
 * Never put long JavaScript or script tags in HTML, always put them in a controller and call using wf-onattach or other event handler attributes.
+* Event handlers must be JavaScript expressions, never statements (if needed use an IIFE).
 * When calling post('ctrl.action') inside an event handler such as wf-onclick, wf-oninput, etc: Don't use await, those handlers are not async functions.
 * wf-value already wires two-way binding—never add wf-oninput, wf-onchange, or wf-onkeydown on that same element for setting the binding. If you need to react to Enter, wf-onkeydown is OK.
 * `_1` is a special variable only available in wf-onattach and wf-ondetach. Other event handlers only have `event`. And bindings have no special variables besides globals and wf-map scoped variables.

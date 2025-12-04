@@ -1,8 +1,9 @@
+import complete from './complete.js';
 import confetti from 'https://esm.sh/canvas-confetti';
-import { loadman, joinPath } from '../other/util.js';
 import rfiles from '../repos/rfiles.js';
+import { getOpenAIKey, complete as openaiComplete } from './openai.js';
+import { loadman, joinPath } from '../other/util.js';
 import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
-import { complete as openaiComplete } from './openai.js';
 
 let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone'];
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
@@ -2838,6 +2839,333 @@ let actions = window.actions = {
           }
         }, { targets: targetKeys, merged, prev, apply });
       });
+    },
+  },
+
+  startMultiStepAgent: {
+    description: `Starts a recursive multi-step long-running agentic loop for carrying out complex operations, such as autonomously building/refactoring an entire page or working on tasks that touch multiple files. Only call if user explicitly asks for it, otherwise if something they say seem like a good candidate for this, confirm first this is what they want.`,
+    parameters: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'] },
+    handler: async ({ prompt }) => {
+      let st = {
+        phase: 'analyze',
+        files: {},
+        notes: {},
+        plan: [],
+        executionTranscript: [],
+      };
+      for (let x of await rfiles.list(state.projects.current)) st.files[x] = { chunks: [] };
+      let nextInstruction = { mode: st.phase };
+      let blockPlanning = false;
+      function executionState(st) {
+        st = JSON.parse(JSON.stringify(st));
+        delete st.plan;
+        return st;
+      }
+      let grep = {
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: `Substring to search for (required)` },
+            regexp: { type: 'boolean', description: `Whether query should be interpreted as a regular expression or regular substring` },
+            context: { type: 'number', description: `Number of context lines to include before and after each match (defaults to 10)` },
+            sensitive: { type: 'boolean', description: `If true, match using case-sensitive comparison (defaults to false)` },
+            paths: { type: 'array', items: { type: 'string' }, description: `Optional list of file paths to limit the search` },
+            maxResults: { type: 'number', description: `Maximum number of matches to return (defaults to 20)` },
+          },
+          required: ['query'],
+        },
+        handler: async ({ query, regexp = false, context = 10, caseSensitive = false, paths = [], maxResults = 20 } = {}) => {
+          if (regexp) query = new RegExp(query, !caseSensitive ? 'i' : '');
+          else if (!caseSensitive) query = query.toLowerCase();
+          context = Math.max(0, context);
+          maxResults = Math.max(1, maxResults);
+          paths = new Set(paths);
+          let found = new Set();
+          let matches = 0;
+          let truncated = false;
+          for (let path of Object.keys(st.files)) {
+            if (paths.size && !paths.has(path)) continue;
+            if (shouldSkipSearchPath(path)) continue;
+            let type = mimeLookup(path) || '';
+            if (!isLikelyTextFile(path, type)) continue;
+            let fileData;
+            try { fileData = await loadFileLines(path) }
+            catch (err) { console.error(err); continue } // FIXME: Model should know about errors
+            let lines = fileData.lines;
+            let lineCount = fileData.lineCount;
+            for (let idx = 0; idx < lineCount; idx++) {
+              let line = lines[idx] ?? '';
+              line = !caseSensitive ? line.toLowerCase() : line;
+              if (regexp && !query.test(line)) continue;
+              if (!regexp && !line.includes(query)) continue;
+              let from = Math.max(0, idx - context);
+              let to = Math.min(lineCount, idx + context);
+              let snippet = [];
+              for (let j = from; j <= to; j++) snippet.push({ line: j, content: lines[j] ?? '' });
+              found.add(path);
+              insertFileChunk(path, from, snippet);
+              if (++matches >= maxResults) { truncated = true; break }
+            }
+            if (truncated) break;
+          }
+          nextInstruction = { mode: st.phase, lastAction: { tool: 'grep', success: true, query, regexp, caseSensitive, maxResults, found: [...found], truncated } };
+          st.phase === 'execute' && st.executionTranscript.push(nextInstruction.lastAction);
+        },
+      };
+      let tell = {
+        description: `Tell a file's line count. Only use when the files[path].lineCount is undefined.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: `Full path relative to project root` },
+            goal: { type: 'string', description: `Why do you need to know the line count for this file especially if already known?` },
+          },
+          required: ['path', 'goal'],
+        },
+        handler: async ({ path, goal }) => {
+          let { lineCount } = await loadFileLines(path);
+          st.files[path] ??= { lineCount: null, chunks: [] };
+          st.files[path].lineCount = lineCount;
+          nextInstruction = { mode: st.phase, lastAction: { tool: 'tell', success: true, path, lineCount, goal } };
+          st.executionTranscript.push(nextInstruction.lastAction);
+        },
+      };
+      let readLines = {
+        description: `Use tell tool first to know how many lines you can read. Check files[path].{lineCount,chunks} to avoid unnecessary re-reads.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: `Full path relative to project root` },
+            startLine: { type: 'number', description: `First line to read (0-based)` },
+            endLine: { type: 'number', description: `Last line to read (0-based, inclusive)` },
+            count: { type: 'number', description: `Number of lines to read starting at startLine (ignored if endLine provided)` },
+            goal: { type: 'string', description: `Why are you reading these lines especially if they are already available in files[path].chunks?` },
+          },
+          required: ['path', 'startLine', 'goal'],
+        },
+        handler: async ({ path, startLine = 0, endLine = null, count = null, goal } = {}) => {
+          if (!path) throw new Error(`No file specified or selected.`);
+          if (!Number.isFinite(startLine)) throw new Error(`Invalid startLine`);
+          startLine = Math.max(0, Math.floor(startLine));
+          if (endLine == null) {
+            if (!Number.isFinite(count) || count < 1) throw new Error('count must be a positive integer.');
+            endLine = startLine + count;
+          }
+          endLine = Math.max(startLine, endLine);
+          let { lines, lineCount } = await loadFileLines(path);
+          if (lineCount === 0) {
+            nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: true, path, totalLines: 0, startLine: null, endLine: null, hasMoreBefore: false, hasMoreAfter: false, goal } };
+            st.phase === 'execute' && st.executionTranscript.push(nextInstruction.lastAction);
+            return;
+          }
+          let maxLine = lineCount;
+          let actualStart = Math.max(0, Math.min(startLine, maxLine));
+          let actualEnd = Math.max(actualStart, Math.min(endLine, maxLine));
+          let slice = [];
+          for (let idx = actualStart; idx <= actualEnd; idx++) slice.push({ line: idx, content: lines[idx] ?? '' });
+          let hasMoreBefore = actualStart > 0;
+          let hasMoreAfter = actualEnd < lineCount;
+          insertFileChunk(path, actualStart, slice);
+          nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: true, path, totalLines: lineCount, startLine: actualStart, endLine: actualEnd, hasMoreBefore, hasMoreAfter, goal } };
+          st.phase === 'execute' && st.executionTranscript.push(nextInstruction.lastAction);
+        },
+      };
+      let writeLines = {
+        description: `Use both to patch existing or create new files`,
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            startLine: { type: 'number' },
+            endLine: { type: 'number' },
+            lines: { type: 'string', description: `Plain string of replacement lines` },
+            goal: { type: 'string', description: `What do you achieve with these changes?` },
+          },
+          required: ['path', 'startLine', 'endLine', 'lines', 'goal']
+        },
+        handler: async ({ path, startLine, endLine, lines, goal }) => {
+          lines = lines.split('\n');
+          let patched = (await loadFileLines(path)).lines;
+          console.log('dropLines:', path, patched.slice(startLine, endLine).join('\n'));
+          console.log('writeLines:', path, lines.join('\n'));
+          console.log([...patched], [...lines]);
+          patched.splice(startLine, endLine - startLine, ...lines);
+          console.log('result:', patched.join('\n'));
+          await rfiles.save(state.projects.current, path, new Blob([patched.join('\n')], { type: mimeLookup(path) }));
+          insertFileChunk(path, startLine, lines.map((txt, i) => ({ line: startLine + i, content: txt })));
+          nextInstruction = { mode: st.phase, lastAction: { tool: 'writeLines', success: true, startLine, endLine, goal } };
+          st.executionTranscript.push(nextInstruction.lastAction);
+        }
+      };
+      let updatePlan = {
+        description: `Only call when the plan is empty or you're coming up with an updated one. Otherwise, consider the function DISABLED.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            plan: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  model: {
+                    type: 'string',
+                    enum: ['gpt-5-mini', 'gpt-5.1', 'gpt-5.1-codex'],
+                    description: `Prefer mini-model for very-very trivial steps, non-Codex model for research/no-codegen steps, and 5.1 for everything else`,
+                  },
+                  task: { type: 'string' },
+                  done: { type: 'boolean' },
+                  goal: { type: 'string', description: `Why does the plan needs updating now?` },
+                },
+                required: ['model', 'task', 'done', 'goal']
+              }
+            },
+          },
+          required: ['plan', 'goal'],
+        },
+        handler: ({ plan }) => {
+          if (JSON.stringify(st.plan) === JSON.stringify(plan)) {
+            blockPlanning = true;
+            nextInstruction = { mode: st.phase, lastAction: { tool: 'updatePlan', success: false, reason: `No changes to plan`, suggestion: `Call executeNextPlanStep or other tools instead` } };
+            return;
+          }
+          console.log(plan.map((x, i) => `${i}. [${x.done ? 'done' : 'todo'}] ${x.task}`).join('\n'));
+          st.plan = plan;
+          st.executionTranscript = [];
+          nextInstruction = { mode: st.phase, lastAction: { tool: 'updatePlan', success: true, steps: plan.length, step: st.step = plan.findIndex(x => !x.done) - 1 } };
+        },
+      };
+      let executeNextPlanStep = { handler: () => { nextInstruction = { mode: st.phase, lastAction: { success: true, step: ++st.step, phase: st.phase = 'execute' } } } };
+      function insertFileChunk(path, startLine, slice) {
+        if (!st.files[path]) st.files[path] = { chunks: [], lineCount: null };
+
+        const chunks = st.files[path].chunks;
+
+        const newStart = startLine;
+        const newEnd   = startLine + slice.length - 1;
+
+        let newChunk = {
+          start: newStart,
+          end:   newEnd,
+          lines: slice.map(x => ({
+            line: x.line,
+            content: x.content ?? ""
+          }))
+        };
+
+        let merged = [];
+        let mergedSomething = false;
+
+        for (const chunk of chunks) {
+          // non-overlapping BEFORE
+          if (newEnd < chunk.start - 1) {
+            merged.push(chunk);
+            continue;
+          }
+
+          // non-overlapping AFTER
+          if (newStart > chunk.end + 1) {
+            merged.push(chunk);
+            continue;
+          }
+
+          // OVERLAP → merge
+          mergedSomething = true;
+
+          const mergedStart = Math.min(newChunk.start, chunk.start);
+          const mergedEnd   = Math.max(newChunk.end,   chunk.end);
+
+          const combined = [];
+          for (let i = mergedStart; i <= mergedEnd; i++) {
+            const fromNew = newChunk.lines.find(l => l.line === i);
+            const fromOld = chunk.lines.find(l => l.line === i);
+            combined.push(fromNew ?? fromOld ?? { line: i, content: "" });
+          }
+
+          newChunk = {
+            start: mergedStart,
+            end:   mergedEnd,
+            lines: combined
+          };
+        }
+
+        // push accumulator
+        merged.push(newChunk);
+        merged.sort((a,b) => a.start - b.start);
+        st.files[path].chunks = merged;
+
+        // --- UPDATE lineCount intelligently ---
+        const lc = st.files[path].lineCount;
+
+        // Case 1: File had no known lineCount → infer minimal bound
+        if (lc == null) {
+          st.files[path].lineCount = newEnd + 1;
+        }
+
+        // Case 2: File already has known lineCount → expand only if necessary
+        else if (newEnd + 1 > lc) {
+          st.files[path].lineCount = newEnd + 1;
+        }
+      }
+      let reanalyze = {
+        description: `Only call when all necessary operations have been carried out`,
+        handler: () => { st.phase = 'analyze'; st.executionTranscript = []; nextInstruction = { mode: st.phase, lastAction: { tool: 'reanalyze', success: true } } },
+      };
+      let finish = { description: `Only call when there's nothing left to do`, handler: () => st.done = true };
+      while (true) {
+        console.log(st);
+        if (st.done) break;
+        switch (st.phase) {
+          case 'analyze': {
+            await complete([{
+              role: 'system',
+              content: [
+                `You're a multi-step recursive agentic loop with two phases: analyze/execute.`,
+                `Current phase: ${st.phase}.`,
+                `Analyze your current state, update your plan as needed, then execute the next planned step.`,
+                `Always use tell tool to know how many lines a file has before attempting readLines.`,
+                `You may add notes about persistent project constraints, gotchas, or tricky details that need vigilance.`,
+                `Current state: ${JSON.stringify(st)}`,
+                `Instructions/goal: ${prompt}`,
+              ],
+            }, {
+              role: 'user',
+              content: JSON.stringify(nextInstruction),
+            }], {
+              model: 'oai:gpt-5.1',
+              apiKey: getOpenAIKey(),
+              tools: { grep, tell, readLines, updatePlan: !blockPlanning && updatePlan, executeNextPlanStep: st.plan.length && executeNextPlanStep, finish: st.plan?.length && st.step >= st.plan.length - 1 && finish },
+              choice: 'required',
+            });
+            break;
+          }
+          case 'execute': {
+            console.log(st.step, st.plan[st.step].task);
+            await complete([{
+              role: 'system',
+              content: [
+                `You're a multi-step recursive agentic loop with two phases: analyze/execute.`,
+                `Current phase: ${st.phase}.`,
+                `Always use tell tool to know how many lines a file has before attempting readLines.`,
+                `You may add notes about persistent project constraints, gotchas, or tricky details that need vigilance.`,
+                `Current state: ${JSON.stringify(executionState(st))}`,
+                `Track executionTranscript so you can tell what was already done, what to do next, and when nothing's left: call reanalyze to validate and proceed.`,
+                `If executionTranscript doesn't reflect full completion, carry out the next step of: ${st.plan[st.step].task}`,
+              ],
+            }, {
+              role: 'user',
+              content: JSON.stringify(nextInstruction),
+            }], {
+              model: `oai:${st.plan[st.step].model}`,
+              apiKey: getOpenAIKey(),
+              tools: { grep, tell, readLines, writeLines, reanalyze }, // FIXME: DOM stuff
+              choice: 'required',
+            });
+            break;
+          }
+        }
+        blockPlanning = false;
+        await new Promise(pres => setTimeout(pres, 1000));
+      }
     },
   },
 

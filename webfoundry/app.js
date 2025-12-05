@@ -1,6 +1,6 @@
-import anime from 'https://cdn.skypack.dev/animejs@3.2.2';
+import anime from 'https://esm.sh/animejs@3.2.2';
 import d from './dominant.js';
-import { camelCase } from 'https://cdn.skypack.dev/case-anything';
+import { camelCase } from 'https://esm.sh/case-anything';
 import { marked } from 'https://esm.sh/marked@13.0.1';
 
 window.anime = anime;

@@ -1,4 +1,4 @@
-import { lookup as mimeLookup } from 'https://cdn.skypack.dev/mrmime';
+import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
 
 window.tap = x => (console.log(x), x);
 

@@ -1,7 +1,7 @@
 import { isMedia, debounce } from '../other/util.js';
 import { mountCodeMirror } from '../other/codemirror.js';
 import rfiles from '../repos/rfiles.js';
-import { lookup as mimeLookup } from 'https://cdn.skypack.dev/mrmime';
+import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
 import * as Y from 'https://esm.sh/yjs@13.6.12?bundle';
 import { CodemirrorBinding } from 'https://esm.sh/y-codemirror?bundle';
 

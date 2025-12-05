@@ -8,7 +8,7 @@ import rprojects from '../repos/rprojects.js';
 import structuredFiles from '../other/structuredFiles.js';
 import { debounce, joinPath, loadman } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
-import { lookup as mimeLookup } from 'https://cdn.skypack.dev/mrmime';
+import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 
 export default class Files {
@@ -16,6 +16,7 @@ export default class Files {
     list: [],
     expandedPaths: new Set(),
     gitImportQueryHandled: false,
+    autoSelectOnLoad: null,
 
     expanded: path => {
       if (!path) return true;
@@ -73,12 +74,21 @@ export default class Files {
         this.state.list = [];
         this.state.expandedPaths = new Set(['pages/']);
         this.state.current = null;
+        this.state.autoSelectOnLoad = project ? 'pages/index.html' : null;
         d.update();
         if (project) {
           await post('files.load');
           if (!state.app.panel || state.app.panel === 'projects') await post('app.selectPanel', 'files');
         }
       }));
+      bus.on('files:load:ready', async () => {
+        let target = this.state.autoSelectOnLoad;
+        this.state.autoSelectOnLoad = null;
+        if (!target || this.state.current) return;
+        let hasTarget = this.state.list.some(x => joinPath(x[1], x[0]) === target);
+        if (!hasTarget) return;
+        await post('files.select', target);
+      });
       bus.on('files:select:ready', ({ path }) => {
         if (!path || path.endsWith('/')) return;
         let parts = path.split('/').slice(0, -1);

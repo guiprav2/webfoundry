@@ -1,7 +1,7 @@
 import JSZip from 'https://esm.sh/jszip';
 import lf from 'https://esm.sh/localforage';
 import rprojects from './rprojects.js';
-import { lookup as mimeLookup } from 'https://cdn.skypack.dev/mrmime';
+import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
 
 class FilesRepository {
   async list(project) {

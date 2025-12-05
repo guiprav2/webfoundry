@@ -2925,12 +2925,17 @@ let actions = window.actions = {
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', enum: tellables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))) }, // st.plan[st.step].targets.includes(x)) },
+            path: { type: 'string', enum: tellables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))), description: `Empty string is PROHIBITED` },
             //goal: { type: 'string', description: `Why do you need to know the line count for this file?` },
           },
           required: ['path', /*'goal'*/],
         },
         handler: async ({ path, goal }) => {
+          if (!path.trim()) {
+            nextInstruction = { mode: st.phase, lastAction: { tool: 'tell', success: false, path, reason: `Empty path is invalid`, goal } };
+            st.executionTranscript.push(nextInstruction.lastAction);
+            return;
+          }
           let { lineCount } = (await loadFileLines(path)) || {};
           if (lineCount == null) {
             console.log(path, 'not found.');
@@ -2949,7 +2954,7 @@ let actions = window.actions = {
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', enum: readables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))) }, // st.plan[st.step].targets.includes(x)) },
+            path: { type: 'string', enum: readables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))), description: `Empty string is PROHIBITED` },
             startLine: { type: 'number', description: `First line to read (0-based)` },
             endLine: { type: 'number', description: `Last line to read (0-based, inclusive)` },
             count: { type: 'number', description: `Number of lines to read starting at startLine (ignored if endLine provided)` },
@@ -2958,6 +2963,11 @@ let actions = window.actions = {
           required: ['path', 'startLine', /*'goal'*/],
         },
         handler: async ({ path, startLine = 0, endLine = null, count = null, goal } = {}) => {
+          if (!path.trim()) {
+            nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: false, path, reason: `Empty path is invalid`, goal } };
+            st.executionTranscript.push(nextInstruction.lastAction);
+            return;
+          }
           console.log('Reading', path, '...');
           if (state.assistant.session) {
             state.assistant.session.sysupdate({ cueZeta: `To achieve "${goal}", I'm now reading ${path.split('/').at(-1)}...` });
@@ -3007,6 +3017,11 @@ let actions = window.actions = {
           required: ['path', 'startLine', 'endLine', 'lines', /*'goal'*/]
         },
         handler: async ({ path, startLine, endLine, lines, goal }) => {
+          if (!path.trim()) {
+            nextInstruction = { mode: st.phase, lastAction: { tool: 'writeLines', success: false, path, reason: `Empty path is invalid`, goal } };
+            st.executionTranscript.push(nextInstruction.lastAction);
+            return;
+          }
           console.log('Writing', path, '...');
           if (state.assistant.session) {
             state.assistant.session.sysupdate({ cueZeta: `To achieve "${goal}", I'm now writing ${path.split('/').at(-1)}...` });
@@ -3014,9 +3029,15 @@ let actions = window.actions = {
           }
           lines = lines.split('\n');
           let patched = (await loadFileLines(path))?.lines || [];
-          patched.splice(startLine, endLine - startLine, ...lines);
+          let replaceCount = Math.max(0, endLine - startLine);
+          patched.splice(startLine, replaceCount, ...lines);
           await rfiles.save(state.projects.current, path, new Blob([patched.join('\n')], { type: mimeLookup(path) }));
-          insertFileChunk(path, startLine, lines.map((txt, i) => ({ line: startLine + i, content: txt })));
+          insertFileChunk(
+            path,
+            startLine,
+            lines.map((txt, i) => ({ line: startLine + i, content: txt })),
+            { replaceCount, totalLines: patched.length }
+          );
           nextInstruction = { mode: st.phase, lastAction: { tool: 'writeLines', success: true, startLine, endLine, goal } };
           st.executionTranscript.push(nextInstruction.lastAction);
         }
@@ -3071,75 +3092,107 @@ let actions = window.actions = {
         },
       };
       let executeNextPlanStep = { handler: () => { nextInstruction = { mode: st.phase, lastAction: { success: true, step: st.step = st.plan.findIndex(x => !x.done), phase: st.phase = 'execute' } } } };
-      function insertFileChunk(path, startLine, slice) {
+      function insertFileChunk(path, startLine, slice, options = {}) {
         if (!st.files[path]) st.files[path] = { chunks: [], lineCount: null };
 
-        const chunks = st.files[path].chunks;
+        let fileEntry = st.files[path];
+        let chunks = fileEntry.chunks;
 
-        const newStart = startLine;
-        const newEnd   = startLine + slice.length - 1;
+        const normalizedSlice = Array.isArray(slice) ? slice : [];
+        let newLines = normalizedSlice.map((x, idx) => ({
+          line: Number.isFinite(x?.line) ? x.line : startLine + idx,
+          content: x?.content ?? "",
+        }));
+        newLines.sort((a, b) => a.line - b.line);
 
-        let newChunk = {
-          start: newStart,
-          end:   newEnd,
-          lines: slice.map(x => ({
-            line: x.line,
-            content: x.content ?? ""
-          }))
-        };
+        const replaceOpt = Number.isFinite(options.replaceCount) ? Math.max(0, Math.floor(options.replaceCount)) : null;
+        const replaceCount = replaceOpt != null ? replaceOpt : newLines.length;
+        const replaceEnd = startLine + replaceCount;
+        const delta = newLines.length - replaceCount;
 
-        let merged = [];
-        let mergedSomething = false;
+        const cloneLines = (lines, offset = 0) => lines.map(line => ({ line: line.line + offset, content: line.content }));
+        const buildChunk = lines => ({ start: lines[0].line, end: lines[lines.length - 1].line, lines });
 
-        for (const chunk of chunks) {
-          // non-overlapping BEFORE
-          if (newEnd < chunk.start - 1) {
-            merged.push(chunk);
-            continue;
+        if (replaceCount > 0 || delta !== 0) {
+          const trimmed = [];
+          for (const chunk of chunks) {
+            if (chunk.end < startLine) {
+              trimmed.push(chunk);
+              continue;
+            }
+            if (chunk.start >= replaceEnd) {
+              trimmed.push(delta ? {
+                start: chunk.start + delta,
+                end: chunk.end + delta,
+                lines: cloneLines(chunk.lines, delta),
+              } : chunk);
+              continue;
+            }
+
+            const beforeLines = chunk.lines.filter(line => line.line < startLine);
+            if (beforeLines.length) trimmed.push(buildChunk(cloneLines(beforeLines)));
+
+            const afterLines = chunk.lines.filter(line => line.line >= replaceEnd);
+            if (afterLines.length) trimmed.push(buildChunk(cloneLines(afterLines, delta)));
           }
-
-          // non-overlapping AFTER
-          if (newStart > chunk.end + 1) {
-            merged.push(chunk);
-            continue;
-          }
-
-          // OVERLAP → merge
-          mergedSomething = true;
-
-          const mergedStart = Math.min(newChunk.start, chunk.start);
-          const mergedEnd   = Math.max(newChunk.end,   chunk.end);
-
-          const combined = [];
-          for (let i = mergedStart; i <= mergedEnd; i++) {
-            const fromNew = newChunk.lines.find(l => l.line === i);
-            const fromOld = chunk.lines.find(l => l.line === i);
-            combined.push(fromNew ?? fromOld ?? { line: i, content: "" });
-          }
-
-          newChunk = {
-            start: mergedStart,
-            end:   mergedEnd,
-            lines: combined
-          };
+          fileEntry.chunks = chunks = trimmed;
         }
 
-        // push accumulator
-        merged.push(newChunk);
-        merged.sort((a,b) => a.start - b.start);
-        st.files[path].chunks = merged;
+        if (newLines.length) {
+          let newChunk = buildChunk(newLines);
+          let merged = [];
 
-        // --- UPDATE lineCount intelligently ---
-        const lc = st.files[path].lineCount;
+          for (const chunk of chunks) {
+            // non-overlapping BEFORE
+            if (newChunk.end < chunk.start - 1) {
+              merged.push(newChunk);
+              newChunk = chunk;
+              continue;
+            }
 
-        // Case 1: File had no known lineCount → infer minimal bound
-        if (lc == null) {
-          st.files[path].lineCount = newEnd + 1;
+            // non-overlapping AFTER
+            if (newChunk.start > chunk.end + 1) {
+              merged.push(chunk);
+              continue;
+            }
+
+            // OVERLAP → merge (also handles adjacency)
+            const mergedStart = Math.min(newChunk.start, chunk.start);
+            const mergedEnd   = Math.max(newChunk.end,   chunk.end);
+
+            const combined = [];
+            for (let i = mergedStart; i <= mergedEnd; i++) {
+              const fromNew = newChunk.lines.find(l => l.line === i);
+              const fromOld = chunk.lines.find(l => l.line === i);
+              combined.push(fromNew ?? fromOld ?? { line: i, content: "" });
+            }
+
+            newChunk = {
+              start: mergedStart,
+              end:   mergedEnd,
+              lines: combined
+            };
+          }
+
+          merged.push(newChunk);
+          merged.sort((a,b) => a.start - b.start);
+          fileEntry.chunks = merged;
+        } else if (fileEntry.chunks.length > 1) {
+          fileEntry.chunks.sort((a,b) => a.start - b.start);
         }
 
-        // Case 2: File already has known lineCount → expand only if necessary
-        else if (newEnd + 1 > lc) {
-          st.files[path].lineCount = newEnd + 1;
+        if (Number.isFinite(options.totalLines)) {
+          fileEntry.lineCount = Math.max(0, Math.floor(options.totalLines));
+        } else if (delta !== 0 && fileEntry.lineCount != null) {
+          fileEntry.lineCount = Math.max(0, fileEntry.lineCount + delta);
+        }
+
+        const highestKnown = fileEntry.chunks.reduce((max, chunk) => Math.max(max, chunk.end), -1);
+        if (highestKnown >= 0) {
+          const minCount = highestKnown + 1;
+          if (fileEntry.lineCount == null || fileEntry.lineCount < minCount) {
+            fileEntry.lineCount = minCount;
+          }
         }
       }
       let reanalyze = {
@@ -3170,6 +3223,7 @@ let actions = window.actions = {
                     `You may add notes about persistent project constraints, gotchas, or tricky details that need vigilance.`,
                     `Current state: ${JSON.stringify(st)}`,
                     `Instructions/goal: ${prompt}`,
+                    `CRITICAL: NEVER TELL/READLINES OF EMPTY STRING PATH, THAT MAKES NO SENSE..`,
                   ],
                 }, {
                   role: 'user',
@@ -3204,6 +3258,7 @@ let actions = window.actions = {
                     `If a file looks OK on files[path].chunks and the requested changes are already there, skip writing and call reanalyze.`,
                     `CRITICAL: Completely ignore tell/readLines/writeLines as options for paths not explicitly mentioned in the step description above.`,
                     `CRITICAL: DO NOT RE-READ chunks already present in files[path].chunks.`,
+                    `CRITICAL: NEVER TELL/READLINES OF EMPTY STRING PATH, THAT MAKES NO SENSE..`,
                   ],
                 }, {
                   role: 'user',
@@ -3283,7 +3338,8 @@ async function loadFileLines(path) {
     let text = await loadFileText(path);
     let lines = splitLines(text);
     return { text, lines, lineCount: lines.length };
-  } catch {
+  } catch (err) {
+    console.error(err);
     return null;
   }
 }
@@ -3298,8 +3354,8 @@ function splitLines(text) {
 function isLikelyTextFile(path, type = '') {
   if (!path) return false;
   let lower = path.toLowerCase();
+  if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return true;
   if (!type) {
-    if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return true;
     if (/(\.png|\.jpe?g|\.gif|\.bmp|\.ico|\.pdf|\.zip|\.rar|\.7z|\.mp[34]|\.ogg|\.wav|\.flac|\.woff2?|\.ttf|\.eot|\.otf)$/i.test(lower)) return false;
     return true;
   }

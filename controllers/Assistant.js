@@ -1,7 +1,7 @@
 import actions from '../other/actions.js';
 import autoassist from 'https://esm.sh/@camilaprav/kittygpt@0.0.65/autoassist.js';
 import morphdom from 'https://esm.sh/morphdom';
-import { arrayify, resolve } from '../other/util.js';
+import { arrayify, debounce, resolve } from '../other/util.js';
 import { loadman } from '../other/util.js';
 
 export default class Assistant {
@@ -92,6 +92,7 @@ export default class Assistant {
           cueDelta: tutorial && `Tell the user the blue box around the selection tells them they've just selected the element successfully. Silently call the throw confetti function first and then ask them to find and click the cross icon in the toolbar on the top-right corner.`,
           cueJoker: tutorial && `Tell the user what he just did and how, invite him to explore different things a little if he wants but gently nudge him back on track for the tutorial, politely asking of suggesting him to fulfill your last instruction next if he drifts for too long.`,
         }, fns);
+        this.state.session.prompt = debounce(this.state.session.prompt, 1000);
         tutorial && this.state.session.prompt('cue alpha');
       } catch (err) {
         this.state.tutorial = null;

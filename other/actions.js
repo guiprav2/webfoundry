@@ -40,6 +40,7 @@ let actions = window.actions = {
 
   listProjects: {
     disabled: () => [state.collab.uid !== 'master' && `Peers can't list projects.`],
+    codexHidden: () => state.assistant.codexListBlock,
     handler: () => ({ success: true, names: state.projects.list.map(x => x.split(':')[0]) }),
   },
 
@@ -126,7 +127,11 @@ let actions = window.actions = {
 
   listFiles: {
     disabled: () => [!state.projects.current && `Project not open`],
-    handler: () => ({ success: true, names: state.files.list.map(x => joinPath(x[1], x[0])) }),
+    codexHidden: () => state.assistant.codexListBlock,
+    handler: () => {
+      state.assistant.codexListBlock = true;
+      return { success: true, paths: state.files.list.map(x => `${(x[2] ? 'd' : '-') + `rwxr-${x[2] ? 'x' : '-'}r-${x[2] ? 'x' : '-'}`}\t${joinPath(x[1], x[0])}`).join('\n') };
+    },
   },
 
   mvFile: {
@@ -179,6 +184,7 @@ let actions = window.actions = {
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't read files.`,
     ],
+    codexHidden: ({ path = state.files.current } = {}) => path?.endsWith?.('.html'),
     parameters: {
       type: 'object',
       properties: {
@@ -198,6 +204,7 @@ let actions = window.actions = {
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't read files.`,
     ],
+    codexHidden: ({ path = state.files.current } = {}) => path?.endsWith?.('.html'),
     parameters: {
       type: 'object',
       properties: {
@@ -241,12 +248,13 @@ let actions = window.actions = {
 
   applyPatch: {
     description: `Patches a file using the unified diff format.`,
-    disabled: ({ path = state.files.current }) => [
+    disabled: ({ path = state.files.current } = {}) => [
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't patch files.`,
-      path.endsWith('.html') && `Use other tools to edit HTML files.`,
+      path?.endsWith?.('.html') && `Use other tools to edit HTML files.`,
     ],
     codexOnly: true,
+    codexHidden: ({ path = state.files.current } = {}) => path?.endsWith?.('.html') || state.files.current !== path,
     parameters: {
       type: 'object',
       properties: {
@@ -262,16 +270,20 @@ let actions = window.actions = {
       console.log('Patched', path, ':', patched[path]);
       if (!patched?.[path]) return { success: false, error: `Patch failed` };
       await rfiles.save(project, path, new Blob([patched[path]], { type: mimeLookup(path) }));
+      let entry = state.codeEditor.docs.get(rawctrls.codeEditor.docKey(project, path));
+      entry?.doc?.transact?.(() => { entry.text.delete(0, entry.text.length); entry.text.insert(0, patched[path]) }, 'applyPatch');
     },
   },
 
   writeFile: {
     description: `Creates and/or overwrites a file completely.`,
-    disabled: () => [
+    disabled: ({ path = state.files.current } = {}) => [
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't write files.`,
+      path?.endsWith?.('.html') && `Use other tools to edit HTML files.`,
     ],
     codexOnly: true,
+    codexHidden: ({ path = state.files.current } = {}) => path?.endsWith?.('.html') || state.files.current !== path,
     parameters: {
       type: 'object',
       properties: {
@@ -280,7 +292,12 @@ let actions = window.actions = {
       },
       required: ['content'],
     },
-    handler: async ({ path = state.files.current, content } = {}) => await rfiles.save(state.projects.current, path, new Blob([content], { type: mimeLookup(path) })),
+    handler: async ({ path = state.files.current, content } = {}) => {
+      let project = state.projects.current;
+      await rfiles.save(project, path, new Blob([content], { type: mimeLookup(path) }));
+      let entry = state.codeEditor.docs.get(rawctrls.codeEditor.docKey(project, path));
+      entry?.doc?.transact?.(() => { entry.text.delete(0, entry.text.length); entry.text.insert(0, content) }, 'writeFile');
+    },
   },
 
   /*
@@ -751,7 +768,7 @@ let actions = window.actions = {
   selectParentElement: {
     description: `Moves selection to the parent element`,
     shortcut: ['ArrowLeft', 'h'],
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -776,7 +793,7 @@ let actions = window.actions = {
 
   selectNextSibling: {
     shortcut: ['ArrowDown', 'j'],
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -801,7 +818,7 @@ let actions = window.actions = {
 
   selectPrevSibling: {
     shortcut: ['ArrowUp', 'k'],
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -826,7 +843,7 @@ let actions = window.actions = {
 
   selectFirstChild: {
     shortcut: ['ArrowRight', 'l'],
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -851,7 +868,7 @@ let actions = window.actions = {
 
   selectLastChild: {
     shortcut: ['ArrowRight', 'l'],
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -876,7 +893,7 @@ let actions = window.actions = {
 
   createNextSibling: {
     shortcut: 'a',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -929,7 +946,7 @@ let actions = window.actions = {
 
   createPrevSibling: {
     shortcut: 'A',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -982,7 +999,7 @@ let actions = window.actions = {
 
   createLastChild: {
     shortcut: 'i',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1035,7 +1052,7 @@ let actions = window.actions = {
 
   createFirstChild: {
     shortcut: 'I',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1088,7 +1105,7 @@ let actions = window.actions = {
 
   changeElementId: {
     shortcut: 'g',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1132,7 +1149,7 @@ let actions = window.actions = {
 
   changeElementTag: {
     shortcut: 'e',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1213,7 +1230,7 @@ let actions = window.actions = {
   copySelected: {
     description: `Copies currently selected element(s)`,
     shortcut: 'c',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1239,7 +1256,7 @@ let actions = window.actions = {
   deleteSelected: {
     description: `Deletes and copies currently selected element(s)`,
     shortcut: 'd',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1323,7 +1340,7 @@ let actions = window.actions = {
   pasteNextSibling: {
     description: `Pastes copied elements as the next sibling`,
     shortcut: 'p',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1376,7 +1393,7 @@ let actions = window.actions = {
   pastePrevSibling: {
     description: `Pastes copied elements as the previous sibling`,
     shortcut: 'P',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1411,7 +1428,7 @@ let actions = window.actions = {
   pasteLastChild: {
     description: `Pastes copied elements as the last child`,
     shortcut: 'o',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1446,7 +1463,7 @@ let actions = window.actions = {
   pasteFirstChild: {
     description: `Pastes copied elements as the first child`,
     shortcut: 'O',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1481,7 +1498,7 @@ let actions = window.actions = {
   wrap: {
     description: `Wraps selected elements with a new element`,
     shortcut: 'w',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1566,7 +1583,7 @@ let actions = window.actions = {
   unwrap: {
     description: `Unwraps selected element(s), promoting children to their level`,
     shortcut: 'W',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1630,7 +1647,7 @@ let actions = window.actions = {
   },
 
   addCssClasses: {
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1690,7 +1707,7 @@ let actions = window.actions = {
   },
 
   removeCssClasses: {
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string', description: `Whose selection to use (defaults to master)` }, cls: { type: 'array', items: { type: 'string' } } }, required: ['cls'] },
     handler: async ({ cur = 'master', cls } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'removeCssClasses', cur, cls });
@@ -1733,7 +1750,7 @@ let actions = window.actions = {
   },
 
   replaceCssClasses: {
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1816,7 +1833,7 @@ let actions = window.actions = {
 
   toggleCssClass: {
     description: `Toggles a single Tailwind class, optionally removing conflicting ones`,
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1855,7 +1872,7 @@ let actions = window.actions = {
 
   toggleHue: {
     description: `Toggles Tailwind text hue for selected elements`,
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1884,7 +1901,7 @@ let actions = window.actions = {
 
   setShade: {
     description: `Sets Tailwind text shade for selected elements`,
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1911,7 +1928,7 @@ let actions = window.actions = {
 
   toggleBgHue: {
     description: `Toggles Tailwind background hue for selected elements`,
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1940,7 +1957,7 @@ let actions = window.actions = {
 
   setBgShade: {
     description: `Sets Tailwind background shade for selected elements`,
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -1968,7 +1985,7 @@ let actions = window.actions = {
   change: {
     description: `Changes the outer HTML of selected elements (prompts if not provided)`,
     shortcut: 'm',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -2037,7 +2054,7 @@ let actions = window.actions = {
   changeInnerHtml: {
     description: `Changes the inner HTML of selected elements (prompts if not provided)`,
     shortcut: 'M',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`,
     ],
@@ -2095,7 +2112,7 @@ let actions = window.actions = {
 
   changeInputPlaceholder: {
     shortcut: '@',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, placeholder: { type: 'string' } } },
     handler: async ({ cur = 'master', placeholder = null } = {}) => {
       let frame = state.designer.current;
@@ -2125,7 +2142,7 @@ let actions = window.actions = {
   changeFormMethod: {
     description: `Changes a form element's method attribute`,
     shortcut: 'N',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, method: { type: 'string' } } },
     handler: async ({ cur = 'master', method } = {}) => {
       let frame = state.designer.current;
@@ -2155,7 +2172,7 @@ let actions = window.actions = {
   toggleHidden: {
     description: `Toggles visibility of selected elements (via hidden attribute)`,
     shortcut: 'x',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'toggleHidden', cur });
@@ -2178,7 +2195,7 @@ let actions = window.actions = {
   replaceTextContent: {
     description: `If no text is provided, a single-line input modal is shown`,
     shortcut: 't',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, text: { type: 'string' } } },
     handler: async ({ cur = 'master', text } = {}) => {
       let frame = state.designer.current;
@@ -2206,7 +2223,7 @@ let actions = window.actions = {
   replaceMultilineTextContent: {
     description: `Replaces the selected element's content with multiline input; prompts textarea if no text is provided`,
     shortcut: 'T',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, text: { type: 'string' } } },
     handler: async ({ cur = 'master', text } = {}) => {
       let frame = state.designer.current;
@@ -2233,7 +2250,7 @@ let actions = window.actions = {
 
   setInputValue: {
     shortcut: '#',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
@@ -2284,7 +2301,7 @@ let actions = window.actions = {
 
   changeLinkUrl: {
     shortcut: 'H',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, url: { type: 'string' } } },
     handler: async ({ cur = 'master', url } = {}) => {
       let frame = state.designer.current;
@@ -2313,7 +2330,7 @@ let actions = window.actions = {
 
   changeMediaSrc: {
     shortcut: 's',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, src: { type: ['string', 'null'] }, expr: { type: ['string', 'null'] } } },
     handler: async ({ cur = 'master', src, expr } = {}) => {
       let frame = state.designer.current;
@@ -2448,7 +2465,7 @@ let actions = window.actions = {
   // TODO: Test if possible to create a "list gallery media" function and reply using the success object in a usable way.
   setMediaSrcFromGallery: {
     shortcut: 'S',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       let frame = state.designer.current;
@@ -2533,7 +2550,7 @@ let actions = window.actions = {
   },
 
   changeMediaFromPexels: {
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, query: { type: 'string' } } },
     handler: async ({ cur = 'master', query = '' } = {}) => {
       let [btn, url] = await showModal('PexelsGalleryDialog', { query, mode: 'media' });
@@ -2544,7 +2561,7 @@ let actions = window.actions = {
 
   changeBackgroundUrl: {
     shortcut: 'b',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, url: { type: 'string' } } },
     handler: async ({ cur = 'master', url = null } = {}) => {
       let frame = state.designer.current;
@@ -2573,7 +2590,7 @@ let actions = window.actions = {
 
   changeBackgroundFromGallery: {
     shortcut: 'B',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       let frame = state.designer.current;
@@ -2598,7 +2615,7 @@ let actions = window.actions = {
   },
 
   changeBackgroundFromPexels: {
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, query: { type: 'string' } } },
     handler: async ({ cur = 'master', query = '' } = {}) => {
       let [btn, url] = await showModal('PexelsGalleryDialog', { query, mode: 'background' });
@@ -2610,7 +2627,7 @@ let actions = window.actions = {
   setIfExpression: {
     description: `Sets conditional expression for displaying elements (prompts if not provided)`,
     shortcut: 'C',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
       let frame = state.designer.current;
@@ -2643,7 +2660,7 @@ let actions = window.actions = {
   setMapExpression: {
     description: `Sets map expression for repeating elements (prompts if not provided)`,
     shortcut: 'n',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
       let frame = state.designer.current;
@@ -2675,7 +2692,7 @@ let actions = window.actions = {
 
   setEventHandlers: {
     shortcut: 'E',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master', handlers } = {}) => {
       let frame = state.designer.current;
@@ -2706,7 +2723,7 @@ let actions = window.actions = {
 
   setComponent: {
     shortcut: 'V',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, component: { type: 'string' }, componentProps: { type: 'object' } } },
     handler: async ({ cur = 'master', component, componentProps } = {}) => {
       let frame = state.designer.current;
@@ -2777,7 +2794,7 @@ let actions = window.actions = {
 
   setDisabledExpression: {
     shortcut: 'D',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setDisabledExpression', cur, expr });
@@ -2810,7 +2827,7 @@ let actions = window.actions = {
   normalizeStylesUnion: {
     description: `Makes all selected elements have the union of their classes`,
     shortcut: 'Alt-u',
-    disabled: ({ cur = 'master' }) => [!state.designer.open && `Designer closed.`, state.designer.open && (state.designer.current.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && (state.designer.current.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'normalizeStylesUnion', cur });
@@ -2836,7 +2853,7 @@ let actions = window.actions = {
   normalizeStylesIntersect: {
     description: `Makes all selected elements have the intersection of their classes`,
     shortcut: 'Alt-U',
-    disabled: ({ cur = 'master' }) => [
+    disabled: ({ cur = 'master' } = {}) => [
       !state.designer.open && `Designer closed.`,
       state.designer.open && (state.designer.current.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`,
     ],
@@ -2950,89 +2967,99 @@ let actions = window.actions = {
       }]));
       await loadman.run('codex', async () => {
         let agentsmd = await (await rfiles.load(state.projects.current, 'AGENTS.md'))?.text?.();
+        let reasoningCooldown;
         await codex([{ role: 'user', content: prompt }], {
           apiKey: getOpenAIKey(),
           instructions: `You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
-  ## Editing constraints
+## General
 
-  - Default to ASCII when editing or creating files. Only introduce non-ASCII or other Unicode characters when there is a clear justification and the file already uses them.
-  - Add succinct code comments that explain what is going on if code is not self-explanatory. You should not add comments like "Assigns the value to the variable", but a brief comment might be useful ahead of a complex code block that the user would otherwise have to spend time parsing out. Usage of these comments should be rare.
-  - While you are working, you might notice unexpected changes that you didn't make. If this happens, STOP IMMEDIATELY and ask the user how they would like to proceed.
+- Don't worry about listing, creating, or switching to other projects unless the user requests it.
+- If listFiles reveals a mostly empty file tree, start by creating some files to work with (createFile).
 
-  ## Plan tool
+## Editing constraints
 
-  When using the planning tool:
-  - Skip using the planning tool for straightforward tasks (roughly the easiest 25%).
-  - Do not make single-step plans.
-  - When you made a plan, update it after having performed one of the sub-tasks that you shared on the plan.
+- Default to ASCII when editing or creating files. Only introduce non-ASCII or other Unicode characters when there is a clear justification and the file already uses them.
+- Add succinct code comments that explain what is going on if code is not self-explanatory. You should not add comments like "Assigns the value to the variable", but a brief comment might be useful ahead of a complex code block that the user would otherwise have to spend time parsing out. Usage of these comments should be rare.
+* When editing the DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting \`flex justify-center items-center\` on a container).
 
-  ## Special user requests
+## Plan tool
 
-  - If the user asks for a "review", default to a code review mindset: prioritise identifying bugs, risks, behavioural regressions, and missing tests. Findings must be the primary focus of the response - keep summaries or overviews brief and only after enumerating the issues. Present findings first (ordered by severity with file/line references), follow with open questions or assumptions, and offer a change-summary only as a secondary detail. If no findings are discovered, state that explicitly and mention any residual risks or testing gaps.
+When using the planning tool:
+- Skip using the planning tool for straightforward tasks (roughly the easiest 25%).
+- Do not make single-step plans.
+- When you made a plan, update it after having performed one of the sub-tasks that you shared on the plan.
 
-  ## Presenting your work and final message
+## Special user requests
 
-  You are producing plain text that will later be styled by the CLI. Follow these rules exactly. Formatting should make results easy to scan, but not feel mechanical. Use judgment to decide how much structure adds value.
+- If the user asks for a "review", default to a code review mindset: prioritise identifying bugs, risks, behavioural regressions, and missing tests. Findings must be the primary focus of the response - keep summaries or overviews brief and only after enumerating the issues. Present findings first (ordered by severity with file/line references), follow with open questions or assumptions, and offer a change-summary only as a secondary detail. If no findings are discovered, state that explicitly and mention any residual risks or testing gaps.
 
-  - Default: be very concise; friendly coding teammate tone.
-  - Ask only when needed; suggest ideas; mirror the user's style.
-  - For substantial work, summarize clearly; follow final‑answer formatting.
-  - Skip heavy formatting for simple confirmations.
-  - Don't dump large files you've written; reference paths only.
-  - No "save/copy this file" - User is on the same machine.
-  - Offer logical next steps (tests, commits, build) briefly; add verify steps if you couldn't do something.
-  - For code changes:
-    * Lead with a quick explanation of the change, and then give more details on the context covering where and why a change was made. Do not start this explanation with "summary", just jump right in.
-    * If there are natural next steps the user may want to take, suggest them at the end of your response. Do not make suggestions if there are no natural next steps.
-    * When suggesting multiple options, use numeric lists for the suggestions so the user can quickly respond with a single number.
+## Presenting your work and final message
 
-  ### Final answer structure and style guidelines
+You are producing plain text that will later be styled by the CLI. Follow these rules exactly. Formatting should make results easy to scan, but not feel mechanical. Use judgment to decide how much structure adds value.
 
-  - Plain text; CLI handles styling. Use structure only when it helps scanability.
-  - Headers: optional; short Title Case (1-3 words) wrapped in **…**; no blank line before the first bullet; add only if they truly help.
-  - Bullets: use - ; merge related points; keep to one line when possible; 4–6 per list ordered by importance; keep phrasing consistent.
-  - Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with **.
-  - Code samples or multi-line snippets should be wrapped in fenced code blocks; add a language hint whenever obvious.
-  - Structure: group related bullets; order sections general → specific → supporting; for subsections, start with a bolded keyword bullet, then items; match complexity to the task.
-  - Tone: collaborative, concise, factual; present tense, active voice; self‑contained; no "above/below"; parallel wording.
-  - Don'ts: no nested bullets/hierarchies; no ANSI codes; don't cram unrelated keywords; keep keyword lists short—wrap/reformat if long; avoid naming formatting styles in answers.
-  - Adaptation: code explanations → precise, structured with code refs; simple tasks → lead with outcome; big changes → logical walkthrough + rationale + next actions; casual one-offs → plain sentences, no headers/bullets.
-  - File References: When referencing files in your response, make sure to include the relevant start line and always follow the below rules:
-    * Use inline code to make file paths clickable.
-    * Each reference should have a stand alone path. Even if it's the same file.
-    * Accepted: absolute, workspace‑relative, a/ or b/ diff prefixes, or bare filename/suffix.
-    * Line/column (1‑based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
-    * Do not use URIs like file://, vscode://, or https://.
-    * Do not provide range of lines
-    * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\\repo\\project\\main.rs:12:5`,
-          preamble: () => [agentsmd && {
-            role: 'system',
-            content: `AGENTS.md:\n${agentsmd}`,
-          }, {
-            role: 'system',
-            content: [
-              `Call listFiles first to understand project structure.`,
-              `If JavaScript is required and no controller exists yet, creating controllers/App.js using createFile is suggested.`,
-              `All file modifications must happen first using getFileLineCount/readFileLines, then applyPatch.`,
-              `Alternatively writeFile can be used to create and/or overwrite a file completely.`,
-              `For HTML file editing, prefer using a combination of the available tools specialized for DOM editing.`,
-              `Before modifying a file that's not the one currently open, use the selectFile tool first.`,
-              `Currently open project: ${state.projects.current?.split?.(':')?.[0] || '[None]'}`,
-              `Currently open file: ${state.files.current || '[None]'}`,
-            ].join('\n'),
-          }, state.assistant.doc && {
-            role: 'system',
-            content: state.assistant.doc.documentElement.outerHTML,
-          }],
+- Default: be very concise; friendly coding teammate tone.
+- Ask only when needed; suggest ideas; mirror the user's style.
+- For substantial work, summarize clearly; follow final‑answer formatting.
+- Skip heavy formatting for simple confirmations.
+- Don't dump large files you've written; reference paths only.
+- No "save/copy this file" - User is on the same machine.
+- Offer logical next steps (tests, commits, build) briefly; add verify steps if you couldn't do something.
+- For code changes:
+  * Lead with a quick explanation of the change, and then give more details on the context covering where and why a change was made. Do not start this explanation with "summary", just jump right in.
+  * If there are natural next steps the user may want to take, suggest them at the end of your response. Do not make suggestions if there are no natural next steps.
+  * When suggesting multiple options, use numeric lists for the suggestions so the user can quickly respond with a single number.
+
+### Final answer structure and style guidelines
+
+- Plain text; CLI handles styling. Use structure only when it helps scanability.
+- Headers: optional; short Title Case (1-3 words) wrapped in **…**; no blank line before the first bullet; add only if they truly help.
+- Bullets: use - ; merge related points; keep to one line when possible; 4–6 per list ordered by importance; keep phrasing consistent.
+- Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with **.
+- Code samples or multi-line snippets should be wrapped in fenced code blocks; add a language hint whenever obvious.
+- Structure: group related bullets; order sections general → specific → supporting; for subsections, start with a bolded keyword bullet, then items; match complexity to the task.
+- Tone: collaborative, concise, factual; present tense, active voice; self‑contained; no "above/below"; parallel wording.
+- Don'ts: no nested bullets/hierarchies; no ANSI codes; don't cram unrelated keywords; keep keyword lists short—wrap/reformat if long; avoid naming formatting styles in answers.
+- Adaptation: code explanations → precise, structured with code refs; simple tasks → lead with outcome; big changes → logical walkthrough + rationale + next actions; casual one-offs → plain sentences, no headers/bullets.
+- File References: When referencing files in your response, make sure to include the relevant start line and always follow the below rules:
+  * Use inline code to make file paths clickable.
+  * Each reference should have a stand alone path. Even if it's the same file.
+  * Accepted: absolute, workspace‑relative, a/ or b/ diff prefixes, or bare filename/suffix.
+  * Line/column (1‑based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
+  * Do not use URIs like file://, vscode://, or https://.
+  * Do not provide range of lines
+  * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\\repo\\project\\main.rs:12:5`,
+          preamble: () => {
+            let selectedElements = state.designer.current?.ready && (state.designer.current.cursors[state.collab.uid] || []);
+            return [agentsmd && {
+              role: 'system',
+              content: `AGENTS.md:\n${agentsmd}`,
+            }, {
+              role: 'system',
+              content: [
+                `Call listFiles first to understand project structure.`,
+                `If JavaScript is required and no controller exists yet, creating controllers/App.js using createFile is suggested.`,
+                `All file modifications must happen first using getFileLineCount/readFileLines, then applyPatch.`,
+                `Alternatively writeFile can be used to create and/or overwrite a file completely.`,
+                `For HTML file editing, prefer using a combination of the available tools specialized for DOM editing.`,
+                `Before modifying a file that's not the one currently open, use the selectFile tool first.`,
+                `Currently open project: ${state.projects.current?.split?.(':')?.[0] || '[None]'}`,
+                `Currently open file: ${state.files.current || '[None]'}`,
+                state.designer.current?.ready && `Currently selected elements: ${selectedElements.length ? selectedElements.join(', ') : `[None] (use changeSelection to start making changes)`}`,
+              ].filter(Boolean).join('\n'),
+            }, state.assistant.doc && {
+              role: 'system',
+              content: `Current page HTML:\n${state.assistant.doc.documentElement.outerHTML}`,
+            }];
+          },
           tools: fns,
           reasoning: async x => {
             console.log('reasoning:', x);
-            return;
-            if (!state.assistant.session) return;
+            if (!state.assistant.session || reasoningCooldown) return;
+            reasoningCooldown = setTimeout(() => reasoningCooldown = null, 5000);
             state.assistant.session.sysupdate({ cueZeta: x });
             await new Promise(pres => setTimeout(pres, 1000));
-            state.assistant.session.prompt('narrate cue zeta exactly');
+            state.assistant.session.prompt('cue zeta');
           },
         });
       });
@@ -3075,7 +3102,7 @@ let actions = window.actions = {
       ],
       "additionalProperties": false
     },
-    handler: ({ plan }) => { state.assistant.plan = plan; console.log(`Plan updated:`, ...plan.map((x, i) => `- ${i + 1}. ${x.step} [${x.status}]}`)); return `Plan updated` },
+    handler: ({ plan }) => { state.assistant.plan = plan; console.log(`Plan updated:\n${plan.map((x, i) => `- ${i + 1}. ${x.step} [${x.status}]}`).join('\n')}`); return `Plan updated` },
   },
 
   refresh: {

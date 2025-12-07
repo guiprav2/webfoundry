@@ -187,7 +187,7 @@ export default class CodeEditor {
     this.state.fallbackTextarea = null;
   };
 
-  docKey = (project, path) => `${project}::${path}`;
+  docKey = (project, path) => `${project}:${path}`;
 
   getDocEntry = (project, path) => {
     let key = this.docKey(project, path);

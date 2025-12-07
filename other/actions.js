@@ -1,6 +1,8 @@
+import codex from './codex.js';
 import complete from './complete.js';
 import confetti from 'https://esm.sh/canvas-confetti';
 import rfiles from '../repos/rfiles.js';
+import { applyPatch } from './diff.js';
 import { getOpenAIKey, complete as openaiComplete } from './openai.js';
 import { loadman, joinPath } from '../other/util.js';
 import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
@@ -233,21 +235,55 @@ let actions = window.actions = {
         let content = lines[idx] ?? '';
         slice.push({ lineNumber: idx + 1, content });
       }
-      let hasMoreBefore = actualStart > 1;
-      let hasMoreAfter = actualEnd < lineCount;
-      return {
-        success: true,
-        path,
-        totalLines: lineCount,
-        startLine: actualStart,
-        endLine: actualEnd,
-        hasMoreBefore,
-        hasMoreAfter,
-        lines: slice,
-      };
+      return slice.map(x => x.content).join('\n');
     },
   },
 
+  applyPatch: {
+    description: `Patches a file using the unified diff format.`,
+    disabled: ({ path = state.files.current }) => [
+      !state.projects.current && `Project not open`,
+      state.collab.uid !== 'master' && `Peers can't patch files.`,
+      path.endsWith('.html') && `Use other tools to edit HTML files.`,
+    ],
+    codexOnly: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: `Full path relative to project root (defaults to the currently selected file)` },
+        patch: { type: 'string', description: `Strict unified diff patch to apply` },
+      },
+      required: ['patch'],
+    },
+    handler: async ({ path = state.files.current, patch } = {}) => {
+      let project = state.projects.current;
+      let text = await (await rfiles.load(project, path)).text();
+      let patched = applyPatch(patch.replaceAll(/ data-htmlsnap="[^"]+"/g, ''), { [path]: text });
+      console.log('Patched', path, ':', patched[path]);
+      if (!patched?.[path]) return { success: false, error: `Patch failed` };
+      await rfiles.save(project, path, new Blob([patched[path]], { type: mimeLookup(path) }));
+    },
+  },
+
+  writeFile: {
+    description: `Creates and/or overwrites a file completely.`,
+    disabled: () => [
+      !state.projects.current && `Project not open`,
+      state.collab.uid !== 'master' && `Peers can't write files.`,
+    ],
+    codexOnly: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: `Full path relative to project root (defaults to the currently selected file)` },
+        content: { type: 'string', description: `New file contents` },
+      },
+      required: ['content'],
+    },
+    handler: async ({ path = state.files.current, content } = {}) => await rfiles.save(state.projects.current, path, new Blob([content], { type: mimeLookup(path) })),
+  },
+
+  /*
   readFile: {
     description: `LLM-only. Reads the entire contents of a text file.`,
     disabled: () => [
@@ -266,6 +302,7 @@ let actions = window.actions = {
       return { success: true, path, lineCount, content: text };
     },
   },
+  */
 
   searchFilesSubstring: {
     description: `LLM-only. Searches project files for a substring and returns surrounding context lines.`,
@@ -366,6 +403,7 @@ let actions = window.actions = {
     },
   },
 
+  /*
   getVisibleEditorContext: {
     description: `LLM-only. Returns the lines currently visible in the code editor plus optional surrounding context.`,
     disabled: () => [
@@ -622,6 +660,7 @@ let actions = window.actions = {
       throw new Error('Code editor not ready.');
     },
   },
+  */
 
   undo: {
     shortcut: ['Ctrl-z', 'z'],
@@ -1933,15 +1972,15 @@ let actions = window.actions = {
       !state.designer.open && `Designer closed.`,
       state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
     ],
+    codexOnly: true,
     parameters: {
       type: 'object',
       properties: {
         cur: { type: 'string', description: `Whose selected elements to change (defaults to master)` },
-        desc: { type: 'string', description: `Detailed user request decription for HTML generation model` },
+        html: { type: 'string', description: `Adapted/replacement HTML (defaults to opening a modal for user editing)` },
       },
-      required: ['desc'],
     },
-    handler: async ({ cur = 'master', desc = null, html = null } = {}) => {
+    handler: async ({ cur = 'master', html } = {}) => {
       let frame = state.designer.current;
       let cursors = frame.cursors[cur];
       if (!cursors?.length) return;
@@ -1951,26 +1990,6 @@ let actions = window.actions = {
       order.sort((a, b) => {
         if (a.p === b.p) return a.i - b.i;
         return a.p.compareDocumentPosition(b.p) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-      });
-      desc && await loadman.run('actions.changeHtml.aigen', async () => {
-        html = await openaiComplete([{
-          role: 'system',
-          content: [
-            `You're an HTML artisan. You can only use Tailwind classes, no style attributes.`,
-            `Take the page HTML, selection htmlsnap IDs, and user request`,
-            `and generate a bare replacement HTML with no Markdown code block wrappers.`,
-            `Do not generate a full page with html and body tags, only replacement HTML for the selection.`,
-          ],
-        }, {
-          role: 'user',
-          content: [
-            `Page HTML: ${state.designer.current.snap}`,
-            `---`,
-            `Selection htmlsnap IDs: ${order.map(x => frame.map.getKey(x.el)).join(', ')}`,
-            `---`,
-            `User request: ${desc}`,
-          ],
-        }], { model: 'gpt-5.1-codex' });
       });
       if (html == null) {
         let combined = order.map(o => {
@@ -2843,370 +2862,15 @@ let actions = window.actions = {
     },
   },
 
-  startMultiStepAgent: {
-    description: `Starts a recursive multi-step long-running agentic loop for carrying out complex operations, such as autonomously building/refactoring an entire page or working on tasks that touch multiple files. Only call if user explicitly asks for it, otherwise if something they say seem like a good candidate for this, confirm first this is what they want.`,
-    disabled: () => [
-      !state.designer.open && `Designer closed.`,
-      state.collab.uid !== 'master' && `Peers can't toggle preview.`,
-    ],
+  codex: {
+    description: `Delegates to a higher reasoning model's agentic loop`,
+    disabled: () => [state.collab.uid !== 'master' && `Peers can't use codex.`],
     parameters: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'] },
     handler: async ({ prompt }) => {
-      let st = {
-        phase: 'analyze',
-        files: {},
-        notes: {},
-        plan: [],
-        executionTranscript: [],
-      };
-      window.st = st;
-      for (let x of await rfiles.list(state.projects.current)) st.files[x] = { chunks: [] };
-      let nextInstruction = { mode: st.phase };
-      let blockPlanning = false;
-      let tellables = () => [...Object.keys(st.files)].filter(x => st.files[x].lineCount == null);
-      let readables = () => [...Object.keys(st.files)].filter(x => st.files[x].chunks.length !== 1 || st.files[x].chunks[0].lines.length !== st.files[x].lineCount);
-      function executionState(st) {
-        st = JSON.parse(JSON.stringify(st));
-        delete st.plan;
-        return st;
-      }
-      let grep = {
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: `Substring to search for (required)` },
-            regexp: { type: 'boolean', description: `Whether query should be interpreted as a regular expression or regular substring` },
-            context: { type: 'number', description: `Number of context lines to include before and after each match (defaults to 10)` },
-            sensitive: { type: 'boolean', description: `If true, match using case-sensitive comparison (defaults to false)` },
-            paths: { type: 'array', items: { type: 'string' }, description: `Optional list of file paths to limit the search` },
-            maxResults: { type: 'number', description: `Maximum number of matches to return (defaults to 20)` },
-          },
-          required: ['query'],
-        },
-        handler: async ({ query, regexp = false, context = 10, caseSensitive = false, paths = [], maxResults = 20 } = {}) => {
-          if (regexp) query = new RegExp(query, !caseSensitive ? 'i' : '');
-          else if (!caseSensitive) query = query.toLowerCase();
-          context = Math.max(0, context);
-          maxResults = Math.max(1, maxResults);
-          paths = new Set(paths);
-          let found = new Set();
-          let matches = 0;
-          let truncated = false;
-          for (let path of Object.keys(st.files)) {
-            if (paths.size && !paths.has(path)) continue;
-            if (shouldSkipSearchPath(path)) continue;
-            let type = mimeLookup(path) || '';
-            if (!isLikelyTextFile(path, type)) continue;
-            let fileData;
-            try { fileData = await loadFileLines(path) }
-            catch (err) { console.error(err); continue } // FIXME: Model should know about errors
-            let lines = fileData.lines;
-            let lineCount = fileData.lineCount;
-            for (let idx = 0; idx < lineCount; idx++) {
-              let line = lines[idx] ?? '';
-              line = !caseSensitive ? line.toLowerCase() : line;
-              if (regexp && !query.test(line)) continue;
-              if (!regexp && !line.includes(query)) continue;
-              let from = Math.max(0, idx - context);
-              let to = Math.min(lineCount, idx + context);
-              let snippet = [];
-              for (let j = from; j <= to; j++) snippet.push({ line: j, content: lines[j] ?? '' });
-              found.add(path);
-              insertFileChunk(path, from, snippet);
-              if (++matches >= maxResults) { truncated = true; break }
-            }
-            if (truncated) break;
-          }
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'grep', success: true, query, regexp, caseSensitive, maxResults, found: [...found], truncated } };
-          st.phase === 'execute' && st.executionTranscript.push(nextInstruction.lastAction);
-        },
-      };
-      let tell = () => ({
-        description: `Tell a file's line count. Only use when the files[path].lineCount is undefined.`,
-        parameters: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', enum: tellables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))), description: `Empty string is PROHIBITED` },
-            //goal: { type: 'string', description: `Why do you need to know the line count for this file?` },
-          },
-          required: ['path', /*'goal'*/],
-        },
-        handler: async ({ path, goal }) => {
-          if (!path.trim()) {
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'tell', success: false, path, reason: `Empty path is invalid`, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-            return;
-          }
-          let { lineCount } = (await loadFileLines(path)) || {};
-          if (lineCount == null) {
-            console.log(path, 'not found.');
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'tell', success: false, path, reason: `File does not exist`, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-          }
-          st.files[path] ??= { lineCount: null, chunks: [] };
-          st.files[path].lineCount = lineCount;
-          console.log('tell:', path, lineCount);
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'tell', success: true, path, lineCount, goal } };
-          st.executionTranscript.push(nextInstruction.lastAction);
-        },
-      });
-      let readLines = () => ({
-        description: `Use tell tool first to know how many lines you can read. Check files[path].{lineCount,chunks} to avoid unnecessary re-reads.`,
-        parameters: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', enum: readables().filter(x => !st.plan?.[st.step] || st.plan[st.step].targets.some(y => minimatch(x, y))), description: `Empty string is PROHIBITED` },
-            startLine: { type: 'number', description: `First line to read (0-based)` },
-            endLine: { type: 'number', description: `Last line to read (0-based, inclusive)` },
-            count: { type: 'number', description: `Number of lines to read starting at startLine (ignored if endLine provided)` },
-            //goal: { type: 'string', description: `Why are you reading these lines from this file?` },
-          },
-          required: ['path', 'startLine', /*'goal'*/],
-        },
-        handler: async ({ path, startLine = 0, endLine = null, count = null, goal } = {}) => {
-          if (!path.trim()) {
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: false, path, reason: `Empty path is invalid`, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-            return;
-          }
-          console.log('Reading', path, '...');
-          if (state.assistant.session) {
-            state.assistant.session.sysupdate({ cueZeta: `To achieve "${goal}", I'm now reading ${path.split('/').at(-1)}...` });
-            setTimeout(() => state.assistant.session.prompt('cue zeta'), 1000);
-          }
-          if (!Number.isFinite(startLine)) throw new Error(`Invalid startLine`);
-          startLine = Math.max(0, Math.floor(startLine));
-          if (endLine == null) {
-            if (!Number.isFinite(count) || count < 1) throw new Error('count must be a positive integer.');
-            endLine = startLine + count;
-          }
-          endLine = Math.max(startLine, endLine);
-          let { lines, lineCount } = (await loadFileLines(path)) || {};
-          if (lineCount == null) {
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: false, path, reason: `File does not exist`, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-            return;
-          }
-          if (lineCount === 0) {
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: true, path, totalLines: 0, startLine: null, endLine: null, hasMoreBefore: false, hasMoreAfter: false, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-            return;
-          }
-          let maxLine = lineCount;
-          let actualStart = Math.max(0, Math.min(startLine, maxLine));
-          let actualEnd = Math.max(actualStart, Math.min(endLine, maxLine));
-          let slice = [];
-          for (let idx = actualStart; idx <= actualEnd; idx++) slice.push({ line: idx, content: lines[idx] ?? '' });
-          let hasMoreBefore = actualStart > 0;
-          let hasMoreAfter = actualEnd < lineCount;
-          insertFileChunk(path, actualStart, slice);
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'readLines', success: true, path, totalLines: lineCount, startLine: actualStart, endLine: actualEnd, hasMoreBefore, hasMoreAfter, goal } };
-          st.phase === 'execute' && st.executionTranscript.push(nextInstruction.lastAction);
-        },
-      });
-      let writeLines = () => ({
-        description: `Use both to patch existing or create new files`,
-        parameters: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', enum: st.plan[st.step].targets },
-            startLine: { type: 'number' },
-            endLine: { type: 'number' },
-            lines: { type: 'string', description: `Plain string of replacement lines` },
-            //goal: { type: 'string', description: `What do you achieve with these changes?` },
-          },
-          required: ['path', 'startLine', 'endLine', 'lines', /*'goal'*/]
-        },
-        handler: async ({ path, startLine, endLine, lines, goal }) => {
-          if (!path.trim()) {
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'writeLines', success: false, path, reason: `Empty path is invalid`, goal } };
-            st.executionTranscript.push(nextInstruction.lastAction);
-            return;
-          }
-          console.log('Writing', path, '...');
-          if (state.assistant.session) {
-            state.assistant.session.sysupdate({ cueZeta: `To achieve "${goal}", I'm now writing ${path.split('/').at(-1)}...` });
-            setTimeout(() => state.assistant.session.prompt('cue zeta'), 1000);
-          }
-          lines = lines.split('\n');
-          let patched = (await loadFileLines(path))?.lines || [];
-          let replaceCount = Math.max(0, endLine - startLine);
-          patched.splice(startLine, replaceCount, ...lines);
-          await rfiles.save(state.projects.current, path, new Blob([patched.join('\n')], { type: mimeLookup(path) }));
-          insertFileChunk(
-            path,
-            startLine,
-            lines.map((txt, i) => ({ line: startLine + i, content: txt })),
-            { replaceCount, totalLines: patched.length }
-          );
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'writeLines', success: true, startLine, endLine, goal } };
-          st.executionTranscript.push(nextInstruction.lastAction);
-        }
-      });
-      let updatePlan = {
-        description: `Only call when the plan is empty or you're coming up with an updated one. Otherwise, consider the function DISABLED.`,
-        parameters: {
-          type: 'object',
-          properties: {
-            plan: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  model: {
-                    type: 'string',
-                    enum: ['grok-4-1-fast-non-reasoning', 'grok-4-1-fast-reasoning'],
-                    description: `Prefer non-reasoning model for research/no-codegen steps, and reasoning one for everything else`,
-                  },
-                  task: { type: 'string' },
-                  targets: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: `List of target file paths (never plain directories) or minimatch glob patterns to read/write (including any potential new files)`,
-                  },
-                  rw: { type: 'boolean', description: `True enables writing, use false for read-only tasks` },
-                  done: { type: 'boolean' },
-                  goal: { type: 'string', description: `Why does the plan needs updating now?` },
-                },
-                required: ['model', 'task', 'targets', 'rw', 'done', 'goal']
-              }
-            },
-          },
-          required: ['plan', 'goal'],
-        },
-        handler: ({ plan }) => {
-          if (JSON.stringify(st.plan) === JSON.stringify(plan)) {
-            console.log(`Plan unchanged.`);
-            blockPlanning = true;
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'updatePlan', success: false, reason: `Plan unchanged`, suggestion: `Call executeNextPlanStep or other tools instead` } };
-            return;
-          }
-          let planText = plan.map((x, i) => `${i}. [${x.done ? 'done' : 'todo'}] ${x.task}`).join('\n');
-          if (state.assistant.session) {
-            state.assistant.session.sysupdate({ cueZeta: `To achieve "${goal}", I'm planning the following tasks: ${planText}` });
-            setTimeout(() => state.assistant.session.prompt('cue zeta'), 1000);
-          }
-          console.log(planText);
-          st.plan = plan;
-          st.executionTranscript = [];
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'updatePlan', success: true, steps: plan.length, step: st.step = plan.findIndex(x => !x.done) } };
-        },
-      };
-      let executeNextPlanStep = { handler: () => { nextInstruction = { mode: st.phase, lastAction: { success: true, step: st.step = st.plan.findIndex(x => !x.done), phase: st.phase = 'execute' } } } };
-      function insertFileChunk(path, startLine, slice, options = {}) {
-        if (!st.files[path]) st.files[path] = { chunks: [], lineCount: null };
-
-        let fileEntry = st.files[path];
-        let chunks = fileEntry.chunks;
-
-        const normalizedSlice = Array.isArray(slice) ? slice : [];
-        let newLines = normalizedSlice.map((x, idx) => ({
-          line: Number.isFinite(x?.line) ? x.line : startLine + idx,
-          content: x?.content ?? "",
-        }));
-        newLines.sort((a, b) => a.line - b.line);
-
-        const replaceOpt = Number.isFinite(options.replaceCount) ? Math.max(0, Math.floor(options.replaceCount)) : null;
-        const replaceCount = replaceOpt != null ? replaceOpt : newLines.length;
-        const replaceEnd = startLine + replaceCount;
-        const delta = newLines.length - replaceCount;
-
-        const cloneLines = (lines, offset = 0) => lines.map(line => ({ line: line.line + offset, content: line.content }));
-        const buildChunk = lines => ({ start: lines[0].line, end: lines[lines.length - 1].line, lines });
-
-        if (replaceCount > 0 || delta !== 0) {
-          const trimmed = [];
-          for (const chunk of chunks) {
-            if (chunk.end < startLine) {
-              trimmed.push(chunk);
-              continue;
-            }
-            if (chunk.start >= replaceEnd) {
-              trimmed.push(delta ? {
-                start: chunk.start + delta,
-                end: chunk.end + delta,
-                lines: cloneLines(chunk.lines, delta),
-              } : chunk);
-              continue;
-            }
-
-            const beforeLines = chunk.lines.filter(line => line.line < startLine);
-            if (beforeLines.length) trimmed.push(buildChunk(cloneLines(beforeLines)));
-
-            const afterLines = chunk.lines.filter(line => line.line >= replaceEnd);
-            if (afterLines.length) trimmed.push(buildChunk(cloneLines(afterLines, delta)));
-          }
-          fileEntry.chunks = chunks = trimmed;
-        }
-
-        if (newLines.length) {
-          let newChunk = buildChunk(newLines);
-          let merged = [];
-
-          for (const chunk of chunks) {
-            // non-overlapping BEFORE
-            if (newChunk.end < chunk.start - 1) {
-              merged.push(newChunk);
-              newChunk = chunk;
-              continue;
-            }
-
-            // non-overlapping AFTER
-            if (newChunk.start > chunk.end + 1) {
-              merged.push(chunk);
-              continue;
-            }
-
-            // OVERLAP → merge (also handles adjacency)
-            const mergedStart = Math.min(newChunk.start, chunk.start);
-            const mergedEnd   = Math.max(newChunk.end,   chunk.end);
-
-            const combined = [];
-            for (let i = mergedStart; i <= mergedEnd; i++) {
-              const fromNew = newChunk.lines.find(l => l.line === i);
-              const fromOld = chunk.lines.find(l => l.line === i);
-              combined.push(fromNew ?? fromOld ?? { line: i, content: "" });
-            }
-
-            newChunk = {
-              start: mergedStart,
-              end:   mergedEnd,
-              lines: combined
-            };
-          }
-
-          merged.push(newChunk);
-          merged.sort((a,b) => a.start - b.start);
-          fileEntry.chunks = merged;
-        } else if (fileEntry.chunks.length > 1) {
-          fileEntry.chunks.sort((a,b) => a.start - b.start);
-        }
-
-        if (Number.isFinite(options.totalLines)) {
-          fileEntry.lineCount = Math.max(0, Math.floor(options.totalLines));
-        } else if (delta !== 0 && fileEntry.lineCount != null) {
-          fileEntry.lineCount = Math.max(0, fileEntry.lineCount + delta);
-        }
-
-        const highestKnown = fileEntry.chunks.reduce((max, chunk) => Math.max(max, chunk.end), -1);
-        if (highestKnown >= 0) {
-          const minCount = highestKnown + 1;
-          if (fileEntry.lineCount == null || fileEntry.lineCount < minCount) {
-            fileEntry.lineCount = minCount;
-          }
-        }
-      }
-      let reanalyze = {
-        description: `Only call when all necessary operations have been carried out`,
-        handler: () => {
-          st.phase = 'analyze';
-          st.executionTranscript = [];
-          blockPlanning = false;
-          nextInstruction = { mode: st.phase, lastAction: { tool: 'reanalyze', success: true, request: `Validate current plan step, mark as done and move on; or update plan to outline missing tasks` } };
-        },
-      };
-      let finish = { description: `Only call when there's nothing left to do`, handler: () => st.done = true };
-      await loadman.run('actions.startMultiStepAgent', async () => {
-        while (true) {
+      let fns = Object.fromEntries([...Object.entries(actions)].filter(([k]) => k !== 'codex').map(([k, v]) => [k, {
+        description: v.description,
+        parameters: v.parameters,
+        handler: async params => {
           try {
             //console.log(st);
             //for (let x of ['AGENTS.md', 'controllers/App.js', 'pages/index.html']) console.log(x, ':', tellables().indexOf(x), readables().indexOf(x));
@@ -3280,12 +2944,138 @@ let actions = window.actions = {
             await new Promise(pres => setTimeout(pres, 200));
           } catch (err) {
             console.error(err);
-            nextInstruction = { mode: st.phase, lastAction: { tool: 'unknown', success: false, error: err.toString() } };
-            await new Promise(pres => setTimeout(pres, 5000));
+            return { success: false, error: err.toString() };
           }
-        }
+        },
+      }]));
+      await loadman.run('codex', async () => {
+        let agentsmd = await (await rfiles.load(state.projects.current, 'AGENTS.md'))?.text?.();
+        await codex([{ role: 'user', content: prompt }], {
+          apiKey: getOpenAIKey(),
+          instructions: `You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
+
+  ## Editing constraints
+
+  - Default to ASCII when editing or creating files. Only introduce non-ASCII or other Unicode characters when there is a clear justification and the file already uses them.
+  - Add succinct code comments that explain what is going on if code is not self-explanatory. You should not add comments like "Assigns the value to the variable", but a brief comment might be useful ahead of a complex code block that the user would otherwise have to spend time parsing out. Usage of these comments should be rare.
+  - While you are working, you might notice unexpected changes that you didn't make. If this happens, STOP IMMEDIATELY and ask the user how they would like to proceed.
+
+  ## Plan tool
+
+  When using the planning tool:
+  - Skip using the planning tool for straightforward tasks (roughly the easiest 25%).
+  - Do not make single-step plans.
+  - When you made a plan, update it after having performed one of the sub-tasks that you shared on the plan.
+
+  ## Special user requests
+
+  - If the user asks for a "review", default to a code review mindset: prioritise identifying bugs, risks, behavioural regressions, and missing tests. Findings must be the primary focus of the response - keep summaries or overviews brief and only after enumerating the issues. Present findings first (ordered by severity with file/line references), follow with open questions or assumptions, and offer a change-summary only as a secondary detail. If no findings are discovered, state that explicitly and mention any residual risks or testing gaps.
+
+  ## Presenting your work and final message
+
+  You are producing plain text that will later be styled by the CLI. Follow these rules exactly. Formatting should make results easy to scan, but not feel mechanical. Use judgment to decide how much structure adds value.
+
+  - Default: be very concise; friendly coding teammate tone.
+  - Ask only when needed; suggest ideas; mirror the user's style.
+  - For substantial work, summarize clearly; follow final‑answer formatting.
+  - Skip heavy formatting for simple confirmations.
+  - Don't dump large files you've written; reference paths only.
+  - No "save/copy this file" - User is on the same machine.
+  - Offer logical next steps (tests, commits, build) briefly; add verify steps if you couldn't do something.
+  - For code changes:
+    * Lead with a quick explanation of the change, and then give more details on the context covering where and why a change was made. Do not start this explanation with "summary", just jump right in.
+    * If there are natural next steps the user may want to take, suggest them at the end of your response. Do not make suggestions if there are no natural next steps.
+    * When suggesting multiple options, use numeric lists for the suggestions so the user can quickly respond with a single number.
+
+  ### Final answer structure and style guidelines
+
+  - Plain text; CLI handles styling. Use structure only when it helps scanability.
+  - Headers: optional; short Title Case (1-3 words) wrapped in **…**; no blank line before the first bullet; add only if they truly help.
+  - Bullets: use - ; merge related points; keep to one line when possible; 4–6 per list ordered by importance; keep phrasing consistent.
+  - Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with **.
+  - Code samples or multi-line snippets should be wrapped in fenced code blocks; add a language hint whenever obvious.
+  - Structure: group related bullets; order sections general → specific → supporting; for subsections, start with a bolded keyword bullet, then items; match complexity to the task.
+  - Tone: collaborative, concise, factual; present tense, active voice; self‑contained; no "above/below"; parallel wording.
+  - Don'ts: no nested bullets/hierarchies; no ANSI codes; don't cram unrelated keywords; keep keyword lists short—wrap/reformat if long; avoid naming formatting styles in answers.
+  - Adaptation: code explanations → precise, structured with code refs; simple tasks → lead with outcome; big changes → logical walkthrough + rationale + next actions; casual one-offs → plain sentences, no headers/bullets.
+  - File References: When referencing files in your response, make sure to include the relevant start line and always follow the below rules:
+    * Use inline code to make file paths clickable.
+    * Each reference should have a stand alone path. Even if it's the same file.
+    * Accepted: absolute, workspace‑relative, a/ or b/ diff prefixes, or bare filename/suffix.
+    * Line/column (1‑based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
+    * Do not use URIs like file://, vscode://, or https://.
+    * Do not provide range of lines
+    * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\\repo\\project\\main.rs:12:5`,
+          preamble: () => [agentsmd && {
+            role: 'system',
+            content: `AGENTS.md:\n${agentsmd}`,
+          }, {
+            role: 'system',
+            content: [
+              `Call listFiles first to understand project structure.`,
+              `If JavaScript is required and no controller exists yet, creating controllers/App.js using createFile is suggested.`,
+              `All file modifications must happen first using getFileLineCount/readFileLines, then applyPatch.`,
+              `Alternatively writeFile can be used to create and/or overwrite a file completely.`,
+              `For HTML file editing, prefer using a combination of the available tools specialized for DOM editing.`,
+              `Before modifying a file that's not the one currently open, use the selectFile tool first.`,
+              `Currently open project: ${state.projects.current?.split?.(':')?.[0] || '[None]'}`,
+              `Currently open file: ${state.files.current || '[None]'}`,
+            ].join('\n'),
+          }, state.assistant.doc && {
+            role: 'system',
+            content: state.assistant.doc.documentElement.outerHTML,
+          }],
+          tools: fns,
+          reasoning: async x => {
+            console.log('reasoning:', x);
+            return;
+            if (!state.assistant.session) return;
+            state.assistant.session.sysupdate({ cueZeta: x });
+            await new Promise(pres => setTimeout(pres, 1000));
+            state.assistant.session.prompt('narrate cue zeta exactly');
+          },
+        });
       });
     },
+  },
+
+  updatePlan: {
+    description: "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+    codexOnly: true,
+    parameters: {
+      "type": "object",
+      "properties": {
+        "explanation": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "description": "One of: pending, in_progress, completed"
+              },
+              "step": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "step",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The list of steps"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "additionalProperties": false
+    },
+    handler: ({ plan }) => { state.assistant.plan = plan; console.log(`Plan updated:`, ...plan.map((x, i) => `- ${i + 1}. ${x.step} [${x.status}]}`)); return `Plan updated` },
   },
 
   refresh: {
@@ -3325,7 +3115,7 @@ async function loadFileText(path) {
   let blob = await rfiles.load(project, path);
   if (!blob) throw new Error(`File not found: ${path}`);
   let type = mimeLookup(path) || blob.type || '';
-  if (!isLikelyTextFile(path, type)) throw new Error(`Binary files are not supported: ${path}`);
+  if (!isLikelyTextFile(path, type)) return null;
   try {
     return await blob.text();
   } catch (err) {

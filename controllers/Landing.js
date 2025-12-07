@@ -6,24 +6,24 @@ export default class Landing {
       {
         id: 'super-todomvc',
         label: 'Super TodoMVC',
-        href: 'editor.html?demo&git=https://github.com/guiprav2/super-todomvc.git',
+        href: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/super-todomvc.git',
       },
       {
         id: 'kankan',
         label: 'Kankan (P2P Kanban Board)',
-        href: 'editor.html?demo&git=https://github.com/guiprav2/kankan.git',
+        href: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/kankan.git',
       },
       /*
       {
         id: 'mailbox',
         label: 'Mailbox Client',
-        href: 'editor.html?demo&git=https://github.com/guiprav2/mailbox.git',
+        href: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/mailbox.git',
       },
       */
       {
         id: 'subgpt',
         label: 'SubGPT (LLM Client)',
-        href: 'editor.html?demo&git=https://github.com/guiprav2/subgpt.git',
+        href: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/subgpt.git',
       },
       {
         id: 'clean',
@@ -34,7 +34,7 @@ export default class Landing {
     currentTemplate: 'super-todomvc',
     currentKey: '',
     pendingKey: '',
-    frameSrc: 'editor.html?demo&git=https://github.com/guiprav2/super-todomvc.git',
+    frameSrc: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/super-todomvc.git',
     showKeyModal: false,
     showDemoModal: false,
     year: new Date().getFullYear(),

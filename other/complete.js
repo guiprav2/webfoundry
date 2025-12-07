@@ -79,7 +79,7 @@ export default async function complete(logs, { model, apiKey, n, rolemap, tools,
         x.arguments = JSON.parse(x.arguments);
         let tool = typeof tools[x.name] === 'function' ? tools[x.name]() : tools[x.name];
         let handler = tool.handler;
-        console.log('calling:', x.name, x.arguments);
+        //console.log('calling:', x.name, x.arguments);
         if (!handler) return x;
         let result = await handler(x.arguments);
         if (result != null) x.result = result;

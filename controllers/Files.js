@@ -155,7 +155,7 @@ export default class Files {
       bus.emit('files:load:ready');
     }), 500),
 
-    select: path => {
+    select: async path => {
       if (state.collab.uid !== 'master') return;
       let project = state.projects.current;
       let { bus } = state.event;
@@ -168,7 +168,14 @@ export default class Files {
       } else {
         this.state.current = path;
       }
+      d.updateSync();
       bus.emit('files:select:ready', { project, path });
+      if (path?.endsWith?.('.html')) await new Promise((pres, prej) => {
+        console.log(1);
+        if (state.designer.list.find(x => x.path === path && x.ready)) { console.log(1.5); return pres() }
+        state.event.bus.on('designer:select:ready', () => (console.log(2), pres()));
+        state.event.bus.on('designer:select:error', () => (console.log(3), prej()));
+      });
     },
 
     create: async (path, name, type = 'file') => {
@@ -508,7 +515,6 @@ export default class Files {
       this.state.gitImportQueryHandled = true;
       let { repoUrl: presetUrl, projectName: presetName } = parseGitImportParam(query);
       let derivedName = presetName?.trim() || deriveProjectNameFromUrl(presetUrl) || '';
-      console.log(state.app.demo, derivedName, state.projects.list);
       if (state.app.demo && derivedName) {
         let existing = state.projects.list.find(x => x.startsWith(`${derivedName}:`));
         if (existing) {
@@ -516,21 +522,11 @@ export default class Files {
           return;
         }
       }
-      let initialName = derivedName || 'Imported Project';
-      let dialogProps = {
-        title: 'Import Git project',
-        requireName: true,
-        initialUrl: presetUrl || '',
-        initialName,
-        initialBranch: '',
-        nameError: '',
-      };
+      let initialName = derivedName || 'imported-project';
       while (true) {
-        let detail = await promptGitImportDialog({ ...dialogProps });
-        if (!detail) return;
-        let repoUrl = detail.url?.trim();
-        let branch = detail.branch?.trim();
-        let projectName = detail.name?.trim();
+        let repoUrl = query;
+        let branch = 'master';
+        let projectName = initialName;
         if (!repoUrl || !branch || !projectName) {
           dialogProps = {
             ...dialogProps,

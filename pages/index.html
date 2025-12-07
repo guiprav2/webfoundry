@@ -216,6 +216,84 @@
             </div>
           </div>
         </section>
+        <section class="max-w-7xl mx-auto px-5 py-16">
+          <h2 class="text-2xl font-bold tracking-tight mb-6">
+            Meet <span class="uppercase tracking-widest">ECSTAZ</span> — The
+            little sibling for simpler needs
+          </h2>
+
+          <p class="text-white/70 leading-relaxed max-w-3xl text-xl">
+            <span class="uppercase tracking-[0.65em] tracking-widest"
+              >ECSTAZ</span
+            >
+            is a modern, minimalist visual site builder — but the breakthrough
+            is that it was built and runs entirely <em>inside Webfoundry</em>.
+            It serves as a living showcase of what’s possible when creation
+            tools are themselves created visually.
+          </p>
+
+          <p
+            class="text-white/70 text-sm leading-relaxed max-w-3xl mt-4 text-xl"
+          >
+            Pages, themes, templates, rich text editing, instant persistence,
+            navigation logic, and Netlify deployment all run inside Webfoundry’s
+            preview mode. If Webfoundry can build
+            <span class="uppercase tracking-[0.65em] tracking-widest"
+              >ECSTAZ</span
+            >, it can build <em>anything</em>.
+          </p>
+
+          <div class="grid sm:grid-cols-3 gap-6 mt-8">
+            <div class="glass rounded-xl p-6">
+              <h3 class="font-semibold">Themeable &amp; Extensible</h3>
+              <p class="text-white/70 text-sm mt-1">
+                Change page templates by editing real HTML. Override layouts
+                using Webfoundry’s visual tools for full creative control.
+              </p>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+              <h3 class="font-semibold">Local-First, Server-Free</h3>
+              <p class="text-white/70 text-sm mt-1">
+                All content is saved instantly to localStorage, making it feel
+                fast, responsive, and completely offline-capable.
+              </p>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+              <h3 class="font-semibold">One-Click Deploys</h3>
+              <p class="text-white/70 text-sm mt-1">
+                Export static HTML, or deploy directly to Netlify from within
+                Webfoundry — no Git, CI, or servers required.
+              </p>
+            </div>
+          </div>
+        </section>
+        <section id="ecstazArea" class="max-w-7xl mx-auto px-5 py-10">
+          <div class="gap-3 items-center justify-between flex mb-6">
+            <h2 class="text-2xl font-bold tracking-tight">
+              Give it a go,
+              <span class="italic">without leaving the page.</span>
+            </h2>
+            <button
+              class="w-full sm:w-auto border border-white/10 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg text-sm hidden sm:block"
+              wf-onclick="post('landing.popout')"
+              value=""
+            >
+              <span>Pop out</span>
+              <span class="nf nf-md-arrow_expand_all text-sm ml-1"></span>
+            </button>
+          </div>
+          <div
+            class="Landing-ratio border border-white/10 bg-black/20 rounded-2xl shadow-soft hidden sm:block"
+          >
+            <iframe
+              id="eczFrame"
+              src="editor.html?demo&amp;git=https://github.com/guiprav2/ecstaz.git"
+              allow="clipboard-read; clipboard-write; microphone; camera; display-capture; geolocation"
+            ></iframe>
+          </div>
+        </section>
       </main>
 
       <div

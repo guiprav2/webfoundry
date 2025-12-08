@@ -202,12 +202,22 @@ async function execWfCommand(command) {
   let cur = params.cur ?? 'master';
   switch (name) {
     case 'readHtml': {
+      if (!state.designer.current?.ready) return { success: false, error: `Designer closed`, hint: `Use selectFile to open the desired HTML file for editing first` };
       return { html: snapshotHtml() };
     }
     case 'changeSelection': {
       let ids = params.ids;
       if (!Array.isArray(ids) || !ids.length) throw new Error('ids must be a non-empty array');
-      let res = await actions.changeSelection.handler({ cur, s: ids });
+      let action = actions.changeSelection;
+      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML for editing');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
+      let res = await action.handler({ cur, s: ids });
       let selection = currentSelectionIds(cur);
       return {
         success: res?.success !== false,
@@ -217,7 +227,14 @@ async function execWfCommand(command) {
     }
     case 'createFile': {
       let action = actions[name];
-      if (!action) throw new Error(`Unsupported action: ${name}`);
+      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML for editing');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
       let result = await action.handler(params || {});
       return result === undefined ? { success: true } : result;
     }
@@ -243,8 +260,15 @@ async function execWfCommand(command) {
     case 'changeInnerHtml':
     case 'changeFormMethod': {
       let action = actions[name];
-      if (!action) throw new Error(`Unsupported action: ${name}`);
       let payload = { ...params, cur };
+      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML for editing');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
       let result = await action.handler(payload);
       return buildDesignerResponse(result, cur);
     }
@@ -257,8 +281,15 @@ async function execWfCommand(command) {
     case 'pasteNextSibling':
     case 'pastePrevSibling': {
       let action = actions[name];
-      if (!action) throw new Error(`Unsupported action: ${name}`);
       let payload = { ...params, cur };
+      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML for editing');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
       let result = await action.handler(payload);
       let base = buildDesignerResponse(result, cur);
       if (!base.createdIds || !base.createdIds.length) {
@@ -268,8 +299,18 @@ async function execWfCommand(command) {
     }
     case 'toggleHidden': {
       let action = actions[name];
-      if (!action) throw new Error(`Unsupported action: ${name}`);
-      await action.handler({ ...params, cur });
+      {
+        let payload = { ...params, cur };
+        let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+        if (reasons.length) {
+          let lines = reasons.map(x => `- ${x}`);
+          if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+            lines.push('Hint: use selectFile to open the desired HTML for editing');
+          }
+          return { success: false, error: lines.join('\n') };
+        }
+        await action.handler(payload);
+      }
       let selection = currentSelectionIds(cur);
       let el = firstSelectedElement(cur);
       let hidden = !!el?.hasAttribute?.('hidden');
@@ -279,8 +320,15 @@ async function execWfCommand(command) {
     case 'addEventHandlers':
     case 'removeEventHandlers': {
       let action = actions[name];
-      if (!action) throw new Error(`Unsupported action: ${name}`);
       let payload = { ...params, cur };
+      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML for editing');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
       let result = await action.handler(payload);
       let base = buildDesignerResponse(result, cur);
       base.handlers = result?.handlers ?? getEventHandlersFromSelection(cur);

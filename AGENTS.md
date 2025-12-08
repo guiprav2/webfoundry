@@ -8,7 +8,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 
 * Suggestions for requests on a mostly empty project (no HTML or JS files): Begin by calling `wf create-file` to scaffold pages/index.html and/or controllers/App.js.
 * In Webfoundry, a div right under body is the page root, not body itself. Make sure all page content is wrapped inside that root div.
-* Always start with HTML first, JavaScript second; back-and-forth until everything is in-place.
+* Always start with HTML first, JavaScript second; back-and-forth until everything is in-place. Don't start JavaScript editing until there's an HTML page to drive from it.
 * Always use `let`, never `const`.
 * Ignore webfoundry/{scripts,templates}.json, they're fully managed by Webfoundry.
 * Never put long JavaScript or script tags in HTML, always put them in a controller and call using wf-onattach or other event handler attributes.
@@ -172,8 +172,8 @@ Webfoundry templates support **declarative bindings**:
 Codex CLI exposes a `wf` command that talks to the local Companion server. Use these subcommands for operations not covered by standard shell helpers:
 
 * `wf create-file pages/index.html` – create new files from Webfoundry templates (always use this instead of manual file creation for HTML/JS assets).
-* `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits).
-* `wf change-selection <id...>` / `wf toggle-selection` – focus specific elements before running DOM tools.
+* `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits); **no arguments allowed**.
+* `wf change-selection id1 id2` / `wf toggle-selection` – focus specific elements before running DOM tools; accepts only data-htmlsnap IDs.
 * `wf copy-selected` plus `wf paste-first-child|paste-last-child|paste-next-sibling|paste-prev-sibling` – duplicate elements relative to the current selection.
 * `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div] [--count 1]` – insert new structure.
 * `wf wrap [--tag div]` / `wf unwrap` / `wf delete-selected` – restructure or clear nodes.
@@ -186,7 +186,17 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Use t
 * `wf set-event-handlers handler=expr` / `wf add-event-handlers` / `wf rm-event-handlers` – manage element event handlers directly.
 
 All `wf` commands accept `--cur` to target a different designer cursor (defaults to `master`).
-Only command that needs a file path is pages/index.html. All others operate based on the currently selected elements.
+
+### Usage Notes & Validation Rules
+
+* Run `wf` commands from inside the Webfoundry project root (the folder that contains `wf.config.js`).
+* `wf create-file` takes exactly one positional argument: the relative path of the new file.
+* `wf read-html` takes *no* arguments. If it fails, ensure a page is open in the designer via `selectFile`.
+* `wf change-selection` accepts only data-htmlsnap IDs—do **not** supply file paths or flags such as `--file`.
+* DOM operations (create, paste, wrap, attribute changes, etc.) operate on the currently selected elements. Open a page with `selectFile` and immediately `wf change-selection` the root or target node before editing.
+* Event handler commands expect `event=expression` pairs (e.g. `wf add-event-handlers click=post('app.handleClick')`).
+* When a command reports missing IDs, refresh your snapshot with `wf read-html` before retrying.
+* Avoid text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands.
 
 ---
 

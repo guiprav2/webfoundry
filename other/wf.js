@@ -14,10 +14,11 @@ const SUBCOMMANDS = {
     description: 'Create a new project file using Webfoundry templates.',
     build: ({ positionals }) => {
       let path = positionals[0];
-      if (!path) throw new Error('Specify <dir/file.ext> to create.');
+      if (!path) throw new Error('Specify <path/file.ext> to create.');
       return { name: 'createFile', params: { path } };
     },
     format: result => {
+      if (!result?.success) return die(result);
       console.log(`Created file: ${result?.path || 'OK'}`);
     },
   },
@@ -25,7 +26,7 @@ const SUBCOMMANDS = {
     description: 'Print the current page HTML snapshot with data-htmlsnap attributes.',
     build: () => ({ name: 'readHtml' }),
     format: result => {
-      if (!result || typeof result.html !== 'string') throw new Error('Unexpected response from readHtml');
+      if (!result?.success) return die(result);
       process.stdout.write(result.html);
     },
   },
@@ -67,6 +68,7 @@ const SUBCOMMANDS = {
     description: 'Delete the currently selected elements.',
     build: ({ flags }) => ({ name: 'deleteSelected', params: { cur: flags.cur || 'master' } }),
     format: result => {
+      if (!result?.success) return die(result);
       console.log('Deleted selection.');
       formatSelectionResult(result);
     },
@@ -244,6 +246,7 @@ const SUBCOMMANDS = {
     description: 'Copy the currently selected element(s) to the clipboard.',
     build: ({ flags }) => ({ name: 'copySelected', params: { cur: flags.cur || 'master' } }),
     format: result => {
+      if (!result?.success) return die(result);
       console.log('Copied selection to clipboard.');
       formatSelectionResult(result);
     },
@@ -361,6 +364,7 @@ function collectValues(value) {
 }
 
 function formatChangeSelectionResult(result = {}) {
+  if (!result?.success) return die(result);
   if (result.missingIds && result.missingIds.length) {
     console.error(`data-htmlsnap not found: ${result.missingIds.join(', ')}`);
     console.error('Run wf read-html to refresh the current markup snapshot.');
@@ -370,10 +374,12 @@ function formatChangeSelectionResult(result = {}) {
 }
 
 function formatSelectionResult(result = {}) {
+  if (!result?.success) return die(result);
   printSelection(result.selectedIds || []);
 }
 
 function formatCreatedResult(result = {}) {
+  if (!result?.success) return die(result);
   if (result.createdIds && result.createdIds.length) {
     console.log(`Created: ${formatIds(result.createdIds)}`);
   }
@@ -381,6 +387,7 @@ function formatCreatedResult(result = {}) {
 }
 
 function formatHandlersResult(result = {}) {
+  if (!result?.success) return die(result);
   let handlers = result.handlers || [];
   if (!handlers.length) {
     console.log('Handlers: [none]');
@@ -394,6 +401,7 @@ function formatHandlersResult(result = {}) {
 }
 
 function formatToggleHiddenResult(result = {}) {
+  if (!result?.success) return die(result);
   let hidden = result.hidden ? 'yes' : 'no';
   console.log(`Hidden attribute: ${hidden}`);
   formatSelectionResult(result);
@@ -462,6 +470,14 @@ function printHelp() {
   console.log('  wf read-html');
   console.log('  wf change-selection --ids section_1_a3 section_1_a4');
   console.log('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
+}
+
+function die(result) {
+  let errText = '';
+  if (typeof result.error === 'string') errText = result.error;
+  if (!errText) errText = 'Command failed.';
+  console.error(errText);
+  process.exit(1);
 }
 
 async function main() {

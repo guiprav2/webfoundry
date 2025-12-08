@@ -209,6 +209,7 @@ async function execWfCommand(command) {
       let ids = params.ids;
       if (!Array.isArray(ids) || !ids.length) throw new Error('ids must be a non-empty array');
       let action = actions.changeSelection;
+      let payload = { cur, s: ids };
       let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
       if (reasons.length) {
         let lines = reasons.map(x => `- ${x}`);
@@ -217,7 +218,7 @@ async function execWfCommand(command) {
         }
         return { success: false, error: lines.join('\n') };
       }
-      let res = await action.handler({ cur, s: ids });
+      let res = await action.handler(payload);
       let selection = currentSelectionIds(cur);
       return {
         success: res?.success !== false,
@@ -227,7 +228,7 @@ async function execWfCommand(command) {
     }
     case 'createFile': {
       let action = actions[name];
-      let reasons = action.disabled?.(payload)?.filter?.(Boolean) || [];
+      let reasons = action.disabled?.(params)?.filter?.(Boolean) || [];
       if (reasons.length) {
         let lines = reasons.map(x => `- ${x}`);
         if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
@@ -235,7 +236,7 @@ async function execWfCommand(command) {
         }
         return { success: false, error: lines.join('\n') };
       }
-      let result = await action.handler(params || {});
+      let result = await action.handler(params);
       return result === undefined ? { success: true } : result;
     }
     case 'toggleSelection':

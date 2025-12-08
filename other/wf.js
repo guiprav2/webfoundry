@@ -312,8 +312,16 @@ function splitList(value) {
   return out;
 }
 
+let VERBOSE = false;
+
 function parseArgs(argv) {
-  const [subcmd, ...rest] = argv;
+  const [subcmd, ...rest0] = argv;
+  // Global flags handled before subcommand: -v / --verbose
+  let rest = [...rest0];
+  while (rest.length && /^--?\w+$/.test(rest[0])) {
+    if (rest[0] === '-v' || rest[0] === '--verbose') { VERBOSE = true; rest.shift(); continue; }
+    break;
+  }
   if (!subcmd || subcmd === 'help' || subcmd === '--help' || subcmd === '-h') {
     printHelp();
     process.exit(subcmd ? 0 : 1);
@@ -461,7 +469,9 @@ function resolveOptionalHtml(flags) {
 }
 
 function printHelp() {
-  console.log('Usage: wf <subcommand> [options]\n');
+  console.log('Usage: wf [-v] <subcommand> [options]\n');
+  console.log('Global flags:');
+  console.log('  -v, --verbose        Print full error stacktraces on failure');
   console.log('Available subcommands:');
   for (let [name, spec] of Object.entries(SUBCOMMANDS)) {
     console.log(`  ${name.padEnd(20)} ${spec.description}`);
@@ -473,8 +483,18 @@ function printHelp() {
 }
 
 function die(result) {
+  // Print the exact command that was run (with args truncated to 64 chars)
+  try {
+    let argv = process.argv.slice(2); // exclude node + script
+    let shown = argv.map(x => {
+      let s = String(x);
+      return s.length > 64 ? s.slice(0, 61) + '...' : s;
+    });
+    console.error(`wf ${shown.join(' ')}`);
+  } catch {}
   let errText = '';
-  if (typeof result.error === 'string') errText = result.error;
+  if (typeof result?.error === 'string') errText = result.error;
+  if (!errText && Array.isArray(result?.errors)) errText = result.errors.filter(Boolean).join('\n');
   if (!errText) errText = 'Command failed.';
   console.error(errText);
   process.exit(1);
@@ -492,7 +512,8 @@ async function main() {
     if (spec.format) spec.format(result);
     else if (result != null) console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
   } catch (err) {
-    console.error(err.message || err);
+    if (VERBOSE && err?.stack) console.error(err.stack);
+    else console.error(err.message || err);
     process.exit(1);
   }
 }

@@ -215,6 +215,12 @@ async function execWfCommand(command) {
         missingIds: res?.missingIds ?? [],
       };
     }
+    case 'createFile': {
+      let action = actions[name];
+      if (!action) throw new Error(`Unsupported action: ${name}`);
+      let result = await action.handler(params || {});
+      return result === undefined ? { success: true } : result;
+    }
     case 'toggleSelection':
     case 'wrap':
     case 'unwrap':

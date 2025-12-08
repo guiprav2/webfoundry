@@ -6,8 +6,9 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 
 ## 📌 General Guidelines
 
-* Suggestions for requests on a mostly empty project (no HTML or JS files): Begin calling createFile to create pages/index.html and/or controllers/App.js.
+* Suggestions for requests on a mostly empty project (no HTML or JS files): Begin by calling `wf create-file` to scaffold pages/index.html and/or controllers/App.js.
 * In Webfoundry, a div right under body is the page root, not body itself. Make sure all page content is wrapped inside that root div.
+* Always start with HTML first, JavaScript second; back-and-forth until everything is in-place.
 * Always use `let`, never `const`.
 * Ignore webfoundry/{scripts,templates}.json, they're fully managed by Webfoundry.
 * Never put long JavaScript or script tags in HTML, always put them in a controller and call using wf-onattach or other event handler attributes.
@@ -170,6 +171,7 @@ Webfoundry templates support **declarative bindings**:
 
 Codex CLI exposes a `wf` command that talks to the local Companion server. Use these subcommands for operations not covered by standard shell helpers:
 
+* `wf create-file pages/index.html` – create new files from Webfoundry templates (always use this instead of manual file creation for HTML/JS assets).
 * `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits).
 * `wf change-selection <id...>` / `wf toggle-selection` – focus specific elements before running DOM tools.
 * `wf copy-selected` plus `wf paste-first-child|paste-last-child|paste-next-sibling|paste-prev-sibling` – duplicate elements relative to the current selection.
@@ -184,6 +186,7 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Use t
 * `wf set-event-handlers handler=expr` / `wf add-event-handlers` / `wf rm-event-handlers` – manage element event handlers directly.
 
 All `wf` commands accept `--cur` to target a different designer cursor (defaults to `master`).
+Only command that needs a file path is pages/index.html. All others operate based on the currently selected elements.
 
 ---
 

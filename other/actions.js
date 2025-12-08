@@ -207,7 +207,10 @@ let actions = window.actions = {
         path: { type: 'string', description: `Full path to new file with extension (empty prompts user)` },
       },
     },
-    handler: async ({ path = null } = {}) => await post('files.create', path?.split?.('/')?.slice?.(0, -1)?.join?.('/'), path?.split?.('/')?.at?.(-1)),
+    handler: async ({ path = null } = {}) => {
+      await post('files.create', path?.split?.('/')?.slice?.(0, -1)?.join?.('/'), path?.split?.('/')?.at?.(-1));
+      return { success: true, path };
+    },
   },
 
   createDirectory: {

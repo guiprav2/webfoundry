@@ -10,6 +10,17 @@ const ENDPOINT = process.env.WF_ENDPOINT || 'ws://localhost:8845';
 const CONFIG_PATH = path.join(os.homedir(), '.webfoundry', 'config.env');
 
 const SUBCOMMANDS = {
+  'create-file': {
+    description: 'Create a new project file using Webfoundry templates.',
+    build: ({ positionals }) => {
+      let path = positionals[0];
+      if (!path) throw new Error('Specify <dir/file.ext> to create.');
+      return { name: 'createFile', params: { path } };
+    },
+    format: result => {
+      console.log(`Created file: ${result?.path || 'OK'}`);
+    },
+  },
   'read-html': {
     description: 'Print the current page HTML snapshot with data-htmlsnap attributes.',
     build: () => ({ name: 'readHtml' }),
@@ -543,6 +554,4 @@ async function resolveProjectId() {
   throw new Error('wf.config.js not found (run wf from inside a Webfoundry project).');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+main();

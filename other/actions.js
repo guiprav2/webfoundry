@@ -18,6 +18,8 @@ let DEFAULT_SHADE = '500';
 
 let actions = window.actions = {
   selectPanel: {
+    description: `Only use upon user request or as a means to call user attention to something`,
+    codexHidden: () => true,
     parameters: {
       type: 'object',
       properties: {
@@ -29,6 +31,7 @@ let actions = window.actions = {
 
   createProject: {
     disabled: () => [state.collab.uid !== 'master' && `Peers can't create projects.`],
+    codexHidden: () => true,
     parameters: {
       type: 'object',
       properties: {
@@ -40,13 +43,14 @@ let actions = window.actions = {
 
   listProjects: {
     disabled: () => [state.collab.uid !== 'master' && `Peers can't list projects.`],
-    codexHidden: () => state.assistant.codexListBlock,
+    codexHidden: () => true,
     handler: () => ({ success: true, names: state.projects.list.map(x => x.split(':')[0]) }),
   },
 
   selectProject: {
     description: `Confirm exact requested project name by calling listProjects first.`,
     disabled: () => [state.collab.uid !== 'master' && `Peers can't select projects.`],
+    codexHidden: () => true,
     parameters: {
       type: 'object',
       properties: { name: { type: 'string' } },
@@ -56,6 +60,7 @@ let actions = window.actions = {
 
   renameProject: {
     disabled: () => [state.collab.uid !== 'master' && `Peers can't create projects.`],
+    codexHidden: () => true,
     parameters: {
       type: 'object',
       properties: {
@@ -72,6 +77,7 @@ let actions = window.actions = {
 
   rmProject: {
     disabled: () => [state.collab.uid !== 'master' && `Peers can't create projects.`],
+    codexHidden: () => true,
     parameters: {
       type: 'object',
       properties: {
@@ -90,10 +96,11 @@ let actions = window.actions = {
       !state.designer.open && `Designer closed.`,
       state.collab.uid !== 'master' && `Peers can't toggle preview.`,
     ],
+    codexHidden: () => true,
     handler: async () => await post('designer.togglePreview'),
   },
 
-  toggleShell: { handler: async () => await post('shell.toggle') },
+  toggleShell: { codexHidden: () => true, handler: async () => await post('shell.toggle') },
 
   createFile: {
     description: `Root files are rare; confirm in which directory to place the new file with user. When asked to "create a page" with a given name, this is probably what the user means.`,
@@ -127,7 +134,7 @@ let actions = window.actions = {
 
   listFiles: {
     disabled: () => [!state.projects.current && `Project not open`],
-    codexHidden: () => state.assistant.codexListBlock,
+    codexHidden: () => true,
     handler: () => {
       state.assistant.codexListBlock = true;
       return { success: true, paths: state.files.list.map(x => `${(x[2] ? 'd' : '-') + `rwxr-${x[2] ? 'x' : '-'}r-${x[2] ? 'x' : '-'}`}\t${joinPath(x[1], x[0])}`).join('\n') };
@@ -216,6 +223,7 @@ let actions = window.actions = {
     },
     handler: async ({ path = state.files.current, startLine = 1, endLine = null, count = null } = {}) => {
       if (!path) throw new Error('No file specified or selected.');
+      if (path.endsWith('.html')) return { success: false, error: `To read HTML, use selectFile instead` };
       let start = Number(startLine);
       if (!Number.isFinite(start)) start = 1;
       start = Math.max(1, Math.floor(start));
@@ -247,7 +255,13 @@ let actions = window.actions = {
   },
 
   applyPatch: {
-    description: `Patches a file using the unified diff format.`,
+    description: `Patches a file using GitHub's diff format. E.g.:
+*** Begin patch
+*** Update file: example.txt
+@@
+- A
++ B
+*** End patch`,
     disabled: ({ path = state.files.current } = {}) => [
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't patch files.`,
@@ -322,7 +336,7 @@ let actions = window.actions = {
   */
 
   searchFilesSubstring: {
-    description: `LLM-only. Searches project files for a substring and returns surrounding context lines.`,
+    description: `Searches project files for a substring and returns surrounding context lines.`,
     disabled: () => [
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't read files.`,
@@ -333,7 +347,7 @@ let actions = window.actions = {
         query: { type: 'string', description: `Substring to search for (required)` },
         context: { type: 'number', description: `Number of context lines to include before and after each match (defaults to 2)` },
         caseSensitive: { type: 'boolean', description: `If true, match using case-sensitive comparison (defaults to false)` },
-        paths: { type: 'array', items: { type: 'string' }, description: `Optional list of file paths to limit the search` },
+        paths: { type: 'array', items: { type: 'string' }, description: `Optional list of file paths to limit the search (don't forget file extensions)` },
         maxResults: { type: 'number', description: `Maximum number of matches to return (defaults to 20)` },
       },
       required: ['query'],
@@ -2968,14 +2982,16 @@ let actions = window.actions = {
       await loadman.run('codex', async () => {
         let agentsmd = await (await rfiles.load(state.projects.current, 'AGENTS.md'))?.text?.();
         let reasoningCooldown;
-        await codex([{ role: 'user', content: prompt }], {
+        await codex(logs, {
           apiKey: getOpenAIKey(),
           instructions: `You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer.
 
 ## General
 
-- Don't worry about listing, creating, or switching to other projects unless the user requests it.
-- If listFiles reveals a mostly empty file tree, start by creating some files to work with (createFile).
+- If request is to port an application to Webfoundry, begin by reading files to be ported. Replicate design and functionality exactly, do not adapt. If original project uses different stack (e.g. TypeScript, SCSS) port them to Webfoundry stack (i.e. plain JavaScript, Tailwind):
+- If the project is empty or missing core assets, immediately create pages/index.html and, when JavaScript is needed, controllers/App.js via createFile.
+- After opening an HTML page with placeholder markup (a div that says "Component intentionally left blank"), select the it with changeSelection and delete it (deleteSelected), then use the DOM editing tools (createFirstChild/createNextSibling/addCssClasses/replaceTextContent/etc) to build the layout.
+- Avoid falling into loops that repeat listFiles, listProjects, or selectPanel when they do not advance the user's request.
 
 ## Editing constraints
 
@@ -2986,8 +3002,6 @@ let actions = window.actions = {
 ## Plan tool
 
 When using the planning tool:
-- Skip using the planning tool for straightforward tasks (roughly the easiest 25%).
-- Do not make single-step plans.
 - When you made a plan, update it after having performed one of the sub-tasks that you shared on the plan.
 
 ## Special user requests
@@ -3031,30 +3045,78 @@ You are producing plain text that will later be styled by the CLI. Follow these 
   * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\\repo\\project\\main.rs:12:5`,
           preamble: () => {
             let selectedElements = state.designer.current?.ready && (state.designer.current.cursors[state.collab.uid] || []);
-            return [agentsmd && {
+            let fileEntries = (state.files?.list || []).map(x => joinPath(x[1], x[0]) || x[0]).filter(Boolean);
+            let fileHints = [];
+            if (state.projects.current) {
+              if (!fileEntries.length) {
+                fileHints.push('Project tree is empty. Create pages/index.html and controllers/App.js with createFile before continuing.');
+              } else {
+                if (!fileEntries.includes('pages/index.html')) {
+                  fileHints.push('pages/index.html is missing. Create it with createFile, then open it with selectFile to start designing.');
+                } else if (!state.files.current || state.files.current === '[None]') {
+                  fileHints.push('pages/index.html exists but is not open. Use selectFile to focus it before editing.');
+                }
+                if (!fileEntries.includes('controllers/App.js')) fileHints.push('controllers/App.js is missing. Create it via createFile if any shared state or actions are needed.');
+              }
+            }
+            if (state.files.current?.endsWith?.('.html')) {
+              fileHints.push('When working on HTML, immediately select the page root div with changeSelection and build structure using DOM tools like createFirstChild/createNextSibling/changeElementTag.');
+            }
+            if (state.designer.current?.ready && !selectedElements?.length) {
+              fileHints.push('No designer selection is active. Use changeSelection to choose the elements you want to edit before calling other DOM actions.');
+            }
+            let hintMessage = fileHints.length ? {
               role: 'system',
-              content: `AGENTS.md:\n${agentsmd}`,
-            }, {
-              role: 'system',
-              content: [
-                `Call listFiles first to understand project structure.`,
-                `If JavaScript is required and no controller exists yet, creating controllers/App.js using createFile is suggested.`,
-                `All file modifications must happen first using getFileLineCount/readFileLines, then applyPatch.`,
-                `Alternatively writeFile can be used to create and/or overwrite a file completely.`,
-                `For HTML file editing, prefer using a combination of the available tools specialized for DOM editing.`,
-                `Before modifying a file that's not the one currently open, use the selectFile tool first.`,
-                `Currently open project: ${state.projects.current?.split?.(':')?.[0] || '[None]'}`,
-                `Currently open file: ${state.files.current || '[None]'}`,
-                state.designer.current?.ready && `Currently selected elements: ${selectedElements.length ? selectedElements.join(', ') : `[None] (use changeSelection to start making changes)`}`,
-              ].filter(Boolean).join('\n'),
-            }, state.assistant.doc && {
-              role: 'system',
-              content: `Current page HTML:\n${state.assistant.doc.documentElement.outerHTML}`,
-            }];
+              content: `Project hints:\n- ${fileHints.join('\n- ')}`,
+            } : null;
+
+            let filePreview = null;
+            if (state.projects.current && state.files?.list?.length && state.files.list.length <= 40) {
+              let preview = state.files.list.map(x => {
+                let perm = (x[2] ? 'd' : '-') + `rwxr-${x[2] ? 'x' : '-'}r-${x[2] ? 'x' : '-'}`;
+                let path = joinPath(x[1], x[0]) || x[0] || '/';
+                return `${perm}\t${x[2] ? path + '/' : path}`;
+              });
+              if (preview.length) {
+                filePreview = {
+                  role: 'system',
+                  content: `Known project entries:\n${preview.join('\n')}`,
+                };
+              }
+            }
+
+            return [
+              agentsmd && {
+                role: 'system',
+                content: `AGENTS.md:\n${agentsmd}`,
+              },
+              hintMessage,
+              filePreview,
+              {
+                role: 'system',
+                content: [
+                  `Call listFiles first to understand project structure.`,
+                  `If JavaScript is required and no controller exists yet, creating controllers/App.js using createFile is suggested.`,
+                  `All file modifications must happen first using getFileLineCount/readFileLines, then applyPatch.`,
+                  `Alternatively writeFile can be used to create and/or overwrite a file completely.`,
+                  `For HTML file editing, prefer using a combination of the available tools specialized for DOM editing.`,
+                  `Before modifying a file that's not the one currently open, use the selectFile tool first.`,
+                  `Project file tree:\n${fileEntries.join('\n')}`,
+                  `Currently open project: ${state.projects.current?.split?.(':')?.[0] || '[None]'}`,
+                  `Currently open file: ${state.files.current || '[None]'}`,
+                  state.designer.current?.ready && `Currently selected elements: ${selectedElements.length ? selectedElements.join(', ') : `[None] (use changeSelection to start making changes)`}`,
+                ].filter(Boolean).join('\n'),
+              },
+              state.assistant.doc && {
+                role: 'system',
+                content: `Current page HTML:\n${state.assistant.doc.documentElement.outerHTML}`,
+              },
+            ].filter(Boolean);
           },
           tools: fns,
           reasoning: async x => {
             console.log('reasoning:', x);
+            return;
             if (!state.assistant.session || reasoningCooldown) return;
             reasoningCooldown = setTimeout(() => reasoningCooldown = null, 5000);
             state.assistant.session.sysupdate({ cueZeta: x });
@@ -3108,13 +3170,14 @@ You are producing plain text that will later be styled by the CLI. Follow these 
   refresh: {
     shortcut: 'r',
     disabled: () => [!state.designer.open && `Designer closed.`],
+    codexHidden: () => true,
     handler: async () => {
       if (state.collab.uid !== 'master') return;
       await post('designer.refresh');
     },
   },
 
-  throwConfetti: { description: `Use only when dictated by cue instructions or the user really deserves it or sounds excited.`, handler: () => { confetti() } },
+  throwConfetti: { description: `Use only when dictated by cue instructions or the user really deserves it or sounds excited.`, codexHidden: () => true, handler: () => { confetti() } },
 };
 
 function getTailwindColorInfo(prefix, cur = state.collab.uid) {

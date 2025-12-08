@@ -22,7 +22,7 @@ let cfg = {
   apiKey: globalThis.process?.env?.OPENAI_API_KEY,
 };
 
-export default async function codex(logs, { apiKey, instructions, rolemap, preamble, tools, choice, reasoning, signal } = {}) {
+export default async function codex(logs, { apiKey, instructions, rolemap, preamble, tools, reasoning, signal } = {}) {
   let { endpoint } = cfg;
   apiKey ??= cfg.apiKey;
   let messages = logs.map(x => {
@@ -36,8 +36,14 @@ export default async function codex(logs, { apiKey, instructions, rolemap, pream
         .filter(xs => typeof xs[1] === 'function' ? xs[1]() : xs[1])
         .map(([name, spec]) => ({ type: 'function', name, parameters: {}, ...(typeof spec === 'function' ? spec() : spec), handler: undefined }));
       //console.log(ctools.map(x => `- ${x.name}: ${x.description}`).join('\n'));
-      let cchoice = !choice || /^auto|required|none$/.test(choice) ? choice : (choice ? { type: 'function', name: choice } : 'auto');
-      let payload = { model: 'gpt-5.1-codex', instructions, input: [...preamble?.() || [], ...messages], tools: ctools, tool_choice: cchoice, reasoning: { effort: 'high', summary: 'auto' } };
+      let payload = {
+        model: state.files.current?.endsWith?.('.html') ? 'gpt-5.1' : 'gpt-5.1-codex',
+        instructions,
+        input: [...preamble?.() || [], ...messages],
+        tools: ctools,
+        tool_choice: 'required',
+        reasoning: state.files.current?.endsWith?.('.html') ? undefined : { effort: 'high', summary: 'auto' },
+      };
       console.log(payload);
       let res = await fetch(endpoint, {
         method: 'POST',
@@ -47,8 +53,8 @@ export default async function codex(logs, { apiKey, instructions, rolemap, pream
       });
       if (res.headers.get('Content-Type') === 'application/json') res = await res.json();
       else res = await res.text();
-      if (typeof res === 'string') return [res.status, res];
-      if (res.error) return console.error(res.error);
+      if (typeof res === 'string') throw new Error(res);
+      if (res.error) throw new Error(JSON.stringify(res.error));
       res.output = (await Promise.all(res.output.map(async item => {
         if (item.type === 'reasoning') { delete item.id; reasoning?.(item.summary.filter(x => x.type === 'summary_text')[0]?.text?.split?.('\n')?.[0]); messages.push(item); return }
         if (item.type !== "function_call") return item;
@@ -65,8 +71,9 @@ export default async function codex(logs, { apiKey, instructions, rolemap, pream
         if (typeof result === 'object' || result == null) messages.push({ type: 'function_call_output', call_id: item.call_id, output: result ? JSON.stringify(result) : 'OK' });
         else messages.push({ type: 'function_call_output', call_id: item.call_id, output: result });
       }))).filter(Boolean);
-      if (res.output.at(-1)?.type === 'assistant') return res;
-      if (state.assistant.plan?.length && state.assistant.plan.every(x => x.status === 'completed')) return;
+      console.log(res);
+      if (res.output.at(-1)?.type === 'assistant') return { success: true, note: res.content };
+      if (state.assistant.plan?.length && state.assistant.plan.every(x => x.status === 'completed')) return { success: true, note: `All planned items completed` };
       await new Promise(pres => setTimeout(pres, 500));
     } catch (err) {
       console.error(err);
@@ -74,4 +81,5 @@ export default async function codex(logs, { apiKey, instructions, rolemap, pream
       await new Promise(pres => setTimeout(pres, 5000));
     }
   }
+  return { success: true, note: `Codex loop finished` };
 };

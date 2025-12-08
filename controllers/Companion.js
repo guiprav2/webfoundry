@@ -5,6 +5,23 @@ export default class Companion {
 
   actions = {
     init: async () => {
+      if (!this.state.wfListener) {
+        this.state.wfListener = async ev => {
+          let { id, command } = ev;
+          try {
+            let result = await execWfCommand(command);
+            await post('companion.send', { type: 'wf:result', id, result });
+          } catch (err) {
+            await post('companion.send', { type: 'wf:result', id, error: err?.message || String(err) });
+          }
+        };
+        state.event?.bus?.on?.('companion:wf:invoke', this.state.wfListener);
+      }
+      state.event?.bus?.on?.('projects:select:ready', async () => {
+        if (this.state.client?.status === 'connected') {
+          await sendIdentify(this.state.client);
+        }
+      });
       state.event.bus.on('settings:global:option:ready', async ({ k, v }) => {
         if (!k.startsWith('companion')) return;
         if (!v && this.state.client) {
@@ -39,6 +56,7 @@ export default class Companion {
         await post('companion.poll');
       });
       state.event.bus.emit('companion:connected');
+      await sendIdentify(client);
     },
 
     send: data => {
@@ -174,4 +192,72 @@ function createClient(key, opt = {}) {
   };
 
   return ret;
+}
+
+async function execWfCommand(command) {
+  if (!command || typeof command !== 'object') throw new Error('Invalid command payload.');
+  let { name, params = {} } = command;
+  if (!name) throw new Error('Command name missing.');
+  let actions = window.actions;
+  switch (name) {
+    case 'readHtml': {
+      return { html: snapshotHtml() };
+    }
+    case 'changeSelection': {
+      let ids = params.ids;
+      if (!Array.isArray(ids) || !ids.length) throw new Error('ids must be a non-empty array');
+      await actions.changeSelection.handler({ cur: params.cur ?? 'master', s: ids });
+      return { success: true, selectedIds: ids };
+    }
+    case 'createFirstChild':
+    case 'createLastChild':
+    case 'createNextSibling':
+    case 'createPrevSibling':
+    case 'wrap':
+    case 'unwrap':
+    case 'deleteSelected':
+    case 'changeElementTag':
+    case 'addCssClasses':
+    case 'removeCssClasses':
+    case 'replaceCssClasses':
+    case 'replaceTextContent':
+    case 'changeInputPlaceholder':
+    case 'changeLinkUrl':
+    case 'changeMediaSrc':
+    case 'setInputValue':
+    case 'setDisabledExpression': {
+      let action = actions[name];
+      if (!action) throw new Error(`Unsupported action: ${name}`);
+      let callParams = { cur: 'master', ...(params || {}) };
+      let result = await action.handler(callParams);
+      return result === undefined ? { success: true } : result;
+    }
+    default:
+      throw new Error(`Unknown wf command: ${name}`);
+  }
+}
+
+async function sendIdentify(client) {
+  try {
+    let projectId = currentProjectId();
+    await post('companion.send', { type: 'identify', kind: 'webfoundry', projectId });
+  } catch (err) {
+    console.error('Failed to send identify message:', err);
+  }
+}
+
+function currentProjectId() {
+  let raw = state.projects?.current;
+  if (!raw) return 'default';
+  let name = raw.split(':')[0];
+  return name || 'default';
+}
+
+function snapshotHtml() {
+  try {
+    return state.assistant?.doc?.documentElement?.outerHTML ?? '';
+  } catch (err) {
+    console.error(err);
+    return '';
+  }
 }

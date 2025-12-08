@@ -165,6 +165,24 @@ Webfoundry templates support **declarative bindings**:
 
 ---
 
+## 🛠️ wf CLI Reference
+
+Codex CLI exposes a `wf` command that talks to the local Companion server. Use these subcommands for operations not covered by standard shell helpers:
+
+* `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits).
+* `wf change-selection <id...>` – focus specific elements before running DOM tools.
+* `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div] [--count 1]` – insert structure relative to the selection.
+* `wf wrap [--tag div]` / `wf unwrap` / `wf delete-selected` – restructure or clear selected nodes.
+* `wf change-element-tag --tag span` – convert the selection to a new tag.
+* `wf add-css-classes|remove-css-classes <classes...>` / `wf replace-css-classes --old old --classes "new"` – adjust Tailwind classes.
+* `wf replace-text "New copy"` – rewrite text content.
+* `wf set-placeholder|set-href|set-src|set-input-value` – update key attributes/bindings.
+* `wf set-disabled --expr "!form.valid"` – change `wf-disabled` expressions.
+
+All `wf` commands accept `--cur` to target a different designer cursor (defaults to `master`).
+
+---
+
 ## 📌 Quick Reference
 
 * **Access state**: `state.<controller>.<field>`

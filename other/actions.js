@@ -36,6 +36,79 @@ function getProjectPaths({ includeDirectories = false, excludeCurrent = false } 
   return [...new Set(found)].sort();
 }
 
+let SHELL_COMMAND_GROUPS = [
+  {
+    heading: 'Project & Files',
+    commands: [
+      { syntax: 'selectFile [path]', description: 'Focus the specified file before reading or editing it.', tool: 'selectFile', args: [{ name: 'path', description: 'Relative path such as pages/index.html' }] },
+      { syntax: 'createFile [path]', description: 'Create a new file (confirm directory in advance).', tool: 'createFile', args: [{ name: 'path', description: 'Full path of the new file' }] },
+      { syntax: 'createDirectory [path]', description: 'Create a new directory.', tool: 'createDirectory', args: [{ name: 'path', description: 'Directory path to create' }] },
+    ],
+  },
+  {
+    heading: 'Designer Selection',
+    commands: [
+      { syntax: 'changeSelection [id ...]', description: 'Select elements by their data-htmlsnap IDs.', tool: 'changeSelection', args: [{ name: 'ids', description: 'One or more ids' }] },
+      { syntax: 'toggleSelection', description: 'Toggle between the current selection and the previous one.', tool: 'toggleSelection' },
+      { syntax: 'copySelected', description: 'Copy the current selection to the clipboard.', tool: 'copySelected' },
+    ],
+  },
+  {
+    heading: 'DOM Structure',
+    commands: [
+      { syntax: 'createFirstChild [--tag div] [--count 1]', description: 'Insert new first-child elements under the selection.', tool: 'createFirstChild' },
+      { syntax: 'createLastChild [--tag div] [--count 1]', description: 'Insert new last-child elements under the selection.', tool: 'createLastChild' },
+      { syntax: 'createNextSibling [--tag div] [--count 1]', description: 'Insert new sibling elements after the selection.', tool: 'createNextSibling' },
+      { syntax: 'createPrevSibling [--tag div] [--count 1]', description: 'Insert new sibling elements before the selection.', tool: 'createPrevSibling' },
+      { syntax: 'pasteNextSibling [--count 1]', description: 'Paste clipboard content after the selection.', tool: 'pasteNextSibling' },
+      { syntax: 'pastePrevSibling [--count 1]', description: 'Paste clipboard content before the selection.', tool: 'pastePrevSibling' },
+      { syntax: 'pasteFirstChild [--count 1]', description: 'Paste clipboard content as the first child.', tool: 'pasteFirstChild' },
+      { syntax: 'pasteLastChild [--count 1]', description: 'Paste clipboard content as the last child.', tool: 'pasteLastChild' },
+      { syntax: 'wrap [--tag div]', description: 'Wrap the selection inside a new element.', tool: 'wrap' },
+      { syntax: 'unwrap', description: 'Unwrap the current selection.', tool: 'unwrap' },
+      { syntax: 'deleteSelected', description: 'Delete the current selection.', tool: 'deleteSelected' },
+      { syntax: 'changeHtml --html "<...>"', description: 'Replace the outer HTML of the selection.', tool: 'changeHtml' },
+      { syntax: 'changeInnerHtml --html "<...>"', description: 'Replace the inner HTML of the selection.', tool: 'changeInnerHtml' },
+    ],
+  },
+  {
+    heading: 'Styling & Attributes',
+    commands: [
+      { syntax: 'changeElementTag --tag span', description: 'Change the tag name of selected elements.', tool: 'changeElementTag', args: [{ name: 'tag', description: 'New tag name' }] },
+      { syntax: 'changeElementId --id header', description: 'Update the id attribute on the selection.', tool: 'changeElementId', args: [{ name: 'id', description: 'New id value' }] },
+      { syntax: 'addCssClasses class...', description: 'Add Tailwind utility classes.', tool: 'addCssClasses', args: [{ name: 'cls', description: 'Classes to add' }] },
+      { syntax: 'removeCssClasses class...', description: 'Remove specific classes.', tool: 'removeCssClasses', args: [{ name: 'cls', description: 'Classes to remove' }] },
+      { syntax: 'replaceCssClasses --old old --classes "new"', description: 'Replace classes matching an existing string or /regex/.', tool: 'replaceCssClasses', args: [
+        { name: 'old', description: 'Existing class string or /regex/' },
+        { name: 'cls', description: 'Replacement classes' },
+      ] },
+      { syntax: 'replaceText "text"', description: 'Replace text content inside the selection.', tool: 'replaceTextContent', args: [{ name: 'text', description: 'New text content' }] },
+      { syntax: 'setPlaceholder "text"', description: 'Set the placeholder attribute.', tool: 'changeInputPlaceholder', args: [{ name: 'placeholder', description: 'Placeholder text' }] },
+      { syntax: 'setHref [url]', description: 'Set the href attribute on anchors.', tool: 'changeLinkUrl', args: [{ name: 'url', description: 'Link URL' }] },
+      { syntax: 'setSrc [url] [expr]', description: 'Set the src attribute or wf-src binding.', tool: 'changeMediaSrc', args: [
+        { name: 'url', description: 'Asset URL' },
+        { name: 'expr', description: 'Optional wf-src expression' },
+      ] },
+      { syntax: 'setInputValue [value] [expr]', description: 'Set value or wf-value binding on inputs.', tool: 'setInputValue', args: [
+        { name: 'value', description: 'Static value' },
+        { name: 'expr', description: 'Binding expression' },
+      ] },
+      { syntax: 'changeFormMethod --method post', description: 'Update the method attribute on the selected form.', tool: 'changeFormMethod', args: [{ name: 'method', description: 'New form method' }] },
+      { syntax: 'toggleHidden', description: 'Toggle the hidden attribute (useful alongside wf-if to declutter overlays).', tool: 'toggleHidden' },
+      { syntax: 'setDisabledExpression expr', description: 'Set the wf-disabled expression.', tool: 'setDisabledExpression', args: [{ name: 'expr', description: 'Expression' }] },
+    ],
+  },
+  {
+    heading: 'Events & Interaction',
+    commands: [
+      { syntax: 'setIfExpression expr', description: 'Set the wf-if expression.', tool: 'setIfExpression', args: [{ name: 'expr', description: 'Condition expression' }] },
+      { syntax: 'setMapExpression expr', description: 'Set the wf-map expression.', tool: 'setMapExpression', args: [{ name: 'expr', description: 'Loop expression' }] },
+      { syntax: 'setEventHandlers handler=expr ...', description: 'Replace all event handlers on the selection.', tool: 'setEventHandlers', args: [{ name: 'handler', description: 'event=expression pair' }] },
+      { syntax: 'addEventHandlers handler=expr ...', description: 'Add or overwrite specific event handlers.', tool: 'addEventHandlers', args: [{ name: 'handler', description: 'event=expression pair' }] },
+      { syntax: 'removeEventHandlers event ...', description: 'Remove specific event handlers from the selection.', tool: 'removeEventHandlers', args: [{ name: 'event', description: 'Event name(s) to remove' }] },
+    ],
+  },
+];
 let actions = window.actions = {
   selectPanel: {
     description: `Only use upon user request or as a means to call user attention to something`,
@@ -777,14 +850,34 @@ let actions = window.actions = {
       if (document.activeElement.tagName !== 'BODY') document.activeElement.blur();
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'changeSelection', cur, s });
       let frame = state.designer.current;
-      s = [...new Set(s.map(x => frame.map.get(x)).filter(x => frame.root.contains(x)).map(x => frame.map.getKey(x)).filter(Boolean))];
-      if (!s.length) frame.lastCursors[cur] = frame.cursors[cur];
-      frame.cursors[cur] = s;
+      let requested = Array.isArray(s) ? s.map(x => String(x)) : [];
+      let prevSelection = frame.cursors[cur] || [];
+      let seen = new Set();
+      let resolved = [];
+      let missing = [];
+      for (let id of requested) {
+        let el = frame.map.get(id);
+        if (!el || !frame.root.contains(el)) {
+          missing.push(id);
+          continue;
+        }
+        let key = frame.map.getKey(el);
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          resolved.push(key);
+        }
+      }
+      if (!resolved.length) frame.lastCursors[cur] = prevSelection;
+      frame.cursors[cur] = resolved;
       d.update();
       if (state.collab.uid === cur) await post('designer.toggleMobileKeyboard');
       await post('designer.sync', state.designer.current);
       await post('collab.sync');
       state.event.bus.emit('actions:changeSelection:ready', { s });
+      let result = { success: true, selectedIds: [...frame.cursors[cur]] };
+      if (missing.length) result.missingIds = missing;
+      result.previousIds = [...prevSelection];
+      return result;
     },
   },
 
@@ -988,6 +1081,9 @@ let actions = window.actions = {
           await actions.changeSelection.handler({ cur, s: [refKey] });
         }
       });
+      let selectionIds = [...(frame.cursors[cur] || [])];
+      let created = createdKeys.length ? createdKeys : selectionIds;
+      return { success: true, createdIds: created, selectedIds: selectionIds };
     },
   },
 
@@ -1041,6 +1137,9 @@ let actions = window.actions = {
           await actions.changeSelection.handler({ cur, s: [refKey] });
         }
       });
+      let selectionIds = [...(frame.cursors[cur] || [])];
+      let created = createdKeys.length ? createdKeys : selectionIds;
+      return { success: true, createdIds: created, selectedIds: selectionIds };
     },
   },
 
@@ -1094,6 +1193,9 @@ let actions = window.actions = {
           await actions.changeSelection.handler({ cur, s: [parentKey] });
         }
       });
+      let selectionIds = [...(frame.cursors[cur] || [])];
+      let created = createdKeys.length ? createdKeys : selectionIds;
+      return { success: true, createdIds: created, selectedIds: selectionIds };
     },
   },
 
@@ -1147,6 +1249,9 @@ let actions = window.actions = {
           await actions.changeSelection.handler({ cur, s: [parentKey] });
         }
       });
+      let selectionIds = [...(frame.cursors[cur] || [])];
+      let created = createdKeys.length ? createdKeys : selectionIds;
+      return { success: true, createdIds: created, selectedIds: selectionIds };
     },
   },
 
@@ -2701,6 +2806,7 @@ let actions = window.actions = {
         }, { targets: targetKeys, newVal, prev, apply });
         await actions.changeSelection.handler({ cur, s: targetKeys });
       });
+      return { success: true, expr: newVal };
     },
   },
 
@@ -2734,6 +2840,7 @@ let actions = window.actions = {
         }, { targets: targetKeys, newVal, prev, apply });
         await actions.changeSelection.handler({ cur, s: targetKeys });
       });
+      return { success: true, expr: newVal };
     },
   },
 
@@ -2745,17 +2852,44 @@ let actions = window.actions = {
       let frame = state.designer.current;
       let el = frame.map.get(frame.cursors[cur][0]);
       if (!el) return;
-      let prevHandlers = [];
-      for (let attr of el.attributes) if (attr.name.startsWith('wf-on')) prevHandlers.push({ name: attr.name.slice(5), expr: attr.value });
-      if (!handlers) {
+      let prevHandlers = getElementEventHandlers(el);
+      let nextHandlers;
+      if (handlers) {
+        nextHandlers = normalizeEventHandlersInput(handlers);
+      } else {
         let [btn, ...val] = await showModal('EventHandlersDialog', { handlers: prevHandlers });
         if (btn !== 'ok') return;
-        handlers = val;
+        nextHandlers = normalizeEventHandlersInput(val);
       }
-      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setEventHandlers', cur, handlers });
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setEventHandlers', cur, handlers: nextHandlers });
       let targetKey = frame.map.getKey(el);
-      let prev = prevHandlers;
-      let next = Array.isArray(handlers) ? handlers.filter(h => h && h.name && h.expr) : [];
+      await post('designer.pushHistory', cur, async apply => {
+        await ifeval(({ args }) => {
+          let el = state.map.get(args.target);
+          if (!el) return;
+          for (let attr of [...el.attributes]) if (attr.name.startsWith('wf-on')) el.removeAttribute(attr.name);
+          let list = args.apply ? args.next : args.prev;
+          for (let h of list) if (h.name && h.expr) el.setAttribute(`wf-on${h.name}`, h.expr);
+        }, { target: targetKey, prev: prevHandlers, next: nextHandlers, apply });
+      });
+      return { success: true, handlers: nextHandlers };
+    },
+  },
+
+  addEventHandlers: {
+    description: `Adds event handlers to the selected element without prompting.`,
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    parameters: { type: 'object', properties: { cur: { type: 'string' }, handlers: { type: 'array', items: { type: 'object' } } }, required: ['handlers'] },
+    handler: async ({ cur = 'master', handlers } = {}) => {
+      let frame = state.designer.current;
+      let el = frame.map.get(frame.cursors[cur][0]);
+      if (!el) return;
+      let additions = normalizeEventHandlersInput(handlers);
+      if (!additions.length) return { success: true, handlers: getElementEventHandlers(el) };
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'addEventHandlers', cur, handlers: additions });
+      let targetKey = frame.map.getKey(el);
+      let prev = getElementEventHandlers(el);
+      let next = mergeEventHandlers(prev, additions);
       await post('designer.pushHistory', cur, async apply => {
         await ifeval(({ args }) => {
           let el = state.map.get(args.target);
@@ -2765,6 +2899,34 @@ let actions = window.actions = {
           for (let h of list) if (h.name && h.expr) el.setAttribute(`wf-on${h.name}`, h.expr);
         }, { target: targetKey, prev, next, apply });
       });
+      return { success: true, handlers: next };
+    },
+  },
+
+  removeEventHandlers: {
+    description: `Removes specific event handlers from the selected element.`,
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    parameters: { type: 'object', properties: { cur: { type: 'string' }, events: { type: 'array', items: { type: 'string' } } }, required: ['events'] },
+    handler: async ({ cur = 'master', events } = {}) => {
+      let frame = state.designer.current;
+      let el = frame.map.get(frame.cursors[cur][0]);
+      if (!el) return;
+      let names = Array.isArray(events) ? events.map(x => String(x).trim()).filter(Boolean) : [];
+      if (!names.length) throw new Error('events must include at least one handler name.');
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'removeEventHandlers', cur, events: names });
+      let targetKey = frame.map.getKey(el);
+      let prev = getElementEventHandlers(el);
+      let next = filterEventHandlers(prev, names);
+      await post('designer.pushHistory', cur, async apply => {
+        await ifeval(({ args }) => {
+          let el = state.map.get(args.target);
+          if (!el) return;
+          for (let attr of [...el.attributes]) if (attr.name.startsWith('wf-on')) el.removeAttribute(attr.name);
+          let list = args.apply ? args.next : args.prev;
+          for (let h of list) if (h.name && h.expr) el.setAttribute(`wf-on${h.name}`, h.expr);
+        }, { target: targetKey, prev, next, apply });
+      });
+      return { success: true, handlers: next };
     },
   },
 
@@ -2868,6 +3030,7 @@ let actions = window.actions = {
         }, { targets: targetKeys, newVal, prev, apply });
         await actions.changeSelection.handler({ cur, s: targetKeys });
       });
+      return { success: true, expr: newVal };
     },
   },
 
@@ -3350,6 +3513,52 @@ function fallbackLineColumnFromIndex(lines, index) {
     }
   }
   return { line: lines.length, column: last.end - last.start + 1 };
+}
+
+function getElementEventHandlers(el) {
+  let handlers = [];
+  if (!el) return handlers;
+  for (let attr of el.attributes) {
+    if (attr.name.startsWith('wf-on')) {
+      handlers.push({ name: attr.name.slice(5), expr: attr.value });
+    }
+  }
+  return handlers;
+}
+
+function normalizeEventHandlersInput(list) {
+  if (!Array.isArray(list)) throw new Error('handlers must be an array of { name, expr }');
+  let normalized = [];
+  for (let item of list) {
+    if (!item) continue;
+    if (Array.isArray(item)) {
+      for (let entry of normalizeEventHandlersInput(item)) normalized.push(entry);
+      continue;
+    }
+    let name = item.name ?? item.event ?? item.type;
+    let expr = item.expr ?? item.expression ?? item.handler;
+    if (typeof name !== 'string') name = name != null ? String(name) : '';
+    if (typeof expr !== 'string') expr = expr != null ? String(expr) : '';
+    name = name.trim();
+    expr = expr.trim();
+    if (!name || !expr) continue;
+    normalized.push({ name, expr });
+  }
+  return normalized;
+}
+
+function mergeEventHandlers(prev, additions) {
+  let additionsMap = new Map();
+  for (let h of additions) additionsMap.set(h.name, h.expr);
+  let next = prev.map(h => additionsMap.has(h.name) ? { name: h.name, expr: additionsMap.get(h.name) } : { ...h });
+  let prevNames = new Set(prev.map(h => h.name));
+  for (let h of additions) if (!prevNames.has(h.name)) next.push({ name: h.name, expr: h.expr });
+  return next;
+}
+
+function filterEventHandlers(prev, names) {
+  let nameSet = new Set(names.map(n => n.toLowerCase()));
+  return prev.filter(h => !nameSet.has(h.name.toLowerCase()));
 }
 
 let ifeval = (fn, args) => new Promise((resolve, reject) => {

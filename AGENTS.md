@@ -15,6 +15,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * When calling post('ctrl.action') inside an event handler such as wf-onclick, wf-oninput, etc: Don't use await, those handlers are not async functions.
 * wf-value already wires two-way binding—never add wf-oninput, wf-onchange, or wf-onkeydown on that same element for setting the binding. If you need to react to Enter, wf-onkeydown is OK.
 * `_1` is a special variable only available in wf-onattach and wf-ondetach. Other event handlers only have `event`. And bindings have no special variables besides globals and wf-map scoped variables.
+* * Never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.) Always use `wf read-html`, `wf change-selection`, and the other DOM manipulation commands documented below to modify markup safely.
 * When special editing DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting `flex justify-center items-center` on a container).
 * Event handler attributes are always e.g. wf-onclick="post('ctrl.action')". Not wf-on-click="...", not data-onclick="...", not even native onclick="...".
 * wf-\* attributes only apply where their native equivalents apply. E.g. wf-value is only valid for \<input>, \<textarea>, etc.
@@ -170,14 +171,17 @@ Webfoundry templates support **declarative bindings**:
 Codex CLI exposes a `wf` command that talks to the local Companion server. Use these subcommands for operations not covered by standard shell helpers:
 
 * `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits).
-* `wf change-selection <id...>` – focus specific elements before running DOM tools.
-* `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div] [--count 1]` – insert structure relative to the selection.
-* `wf wrap [--tag div]` / `wf unwrap` / `wf delete-selected` – restructure or clear selected nodes.
-* `wf change-element-tag --tag span` – convert the selection to a new tag.
+* `wf change-selection <id...>` / `wf toggle-selection` – focus specific elements before running DOM tools.
+* `wf copy-selected` plus `wf paste-first-child|paste-last-child|paste-next-sibling|paste-prev-sibling` – duplicate elements relative to the current selection.
+* `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div] [--count 1]` – insert new structure.
+* `wf wrap [--tag div]` / `wf unwrap` / `wf delete-selected` – restructure or clear nodes.
+* `wf change-element-tag --tag span` / `wf change-element-id --id hero_title` – adjust element tags or IDs.
+* `wf change-html|change-inner-html --html "<...>"` – surgically replace outer/inner markup of the selection.
 * `wf add-css-classes|remove-css-classes <classes...>` / `wf replace-css-classes --old old --classes "new"` – adjust Tailwind classes.
-* `wf replace-text "New copy"` – rewrite text content.
-* `wf set-placeholder|set-href|set-src|set-input-value` – update key attributes/bindings.
-* `wf set-disabled --expr "!form.valid"` – change `wf-disabled` expressions.
+* `wf replace-text "New copy"` / `wf set-placeholder|set-href|set-src|set-input-value|set-form-method` – update attributes and bindings.
+* `wf toggle-hidden` – toggle the `hidden` attribute (useful with `wf-if` to declutter overlays).
+* `wf set-if-expr|set-map-expr|set-disabled --expr "!form.valid"` – update logic expressions.
+* `wf set-event-handlers handler=expr` / `wf add-event-handlers` / `wf rm-event-handlers` – manage element event handlers directly.
 
 All `wf` commands accept `--cur` to target a different designer cursor (defaults to `master`).
 

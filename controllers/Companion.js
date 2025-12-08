@@ -199,6 +199,7 @@ async function execWfCommand(command) {
   let { name, params = {} } = command;
   if (!name) throw new Error('Command name missing.');
   let actions = window.actions;
+  let cur = params.cur ?? 'master';
   switch (name) {
     case 'readHtml': {
       return { html: snapshotHtml() };
@@ -206,13 +207,15 @@ async function execWfCommand(command) {
     case 'changeSelection': {
       let ids = params.ids;
       if (!Array.isArray(ids) || !ids.length) throw new Error('ids must be a non-empty array');
-      await actions.changeSelection.handler({ cur: params.cur ?? 'master', s: ids });
-      return { success: true, selectedIds: ids };
+      let res = await actions.changeSelection.handler({ cur, s: ids });
+      let selection = currentSelectionIds(cur);
+      return {
+        success: res?.success !== false,
+        selectedIds: res?.selectedIds ?? selection,
+        missingIds: res?.missingIds ?? [],
+      };
     }
-    case 'createFirstChild':
-    case 'createLastChild':
-    case 'createNextSibling':
-    case 'createPrevSibling':
+    case 'toggleSelection':
     case 'wrap':
     case 'unwrap':
     case 'deleteSelected':
@@ -225,12 +228,57 @@ async function execWfCommand(command) {
     case 'changeLinkUrl':
     case 'changeMediaSrc':
     case 'setInputValue':
-    case 'setDisabledExpression': {
+    case 'setIfExpression':
+    case 'setMapExpression':
+    case 'setDisabledExpression':
+    case 'changeElementId':
+    case 'copySelected':
+    case 'changeHtml':
+    case 'changeInnerHtml':
+    case 'changeFormMethod': {
       let action = actions[name];
       if (!action) throw new Error(`Unsupported action: ${name}`);
-      let callParams = { cur: 'master', ...(params || {}) };
-      let result = await action.handler(callParams);
-      return result === undefined ? { success: true } : result;
+      let payload = { ...params, cur };
+      let result = await action.handler(payload);
+      return buildDesignerResponse(result, cur);
+    }
+    case 'createFirstChild':
+    case 'createLastChild':
+    case 'createNextSibling':
+    case 'createPrevSibling':
+    case 'pasteFirstChild':
+    case 'pasteLastChild':
+    case 'pasteNextSibling':
+    case 'pastePrevSibling': {
+      let action = actions[name];
+      if (!action) throw new Error(`Unsupported action: ${name}`);
+      let payload = { ...params, cur };
+      let result = await action.handler(payload);
+      let selection = currentSelectionIds(cur);
+      let created = result?.createdIds ?? selection;
+      let base = buildDesignerResponse(result, cur);
+      base.createdIds = created;
+      return base;
+    }
+    case 'toggleHidden': {
+      let action = actions[name];
+      if (!action) throw new Error(`Unsupported action: ${name}`);
+      await action.handler({ ...params, cur });
+      let selection = currentSelectionIds(cur);
+      let el = firstSelectedElement(cur);
+      let hidden = !!el?.hasAttribute?.('hidden');
+      return { success: true, selectedIds: selection, hidden };
+    }
+    case 'setEventHandlers':
+    case 'addEventHandlers':
+    case 'removeEventHandlers': {
+      let action = actions[name];
+      if (!action) throw new Error(`Unsupported action: ${name}`);
+      let payload = { ...params, cur };
+      let result = await action.handler(payload);
+      let base = buildDesignerResponse(result, cur);
+      base.handlers = result?.handlers ?? getEventHandlersFromSelection(cur);
+      return base;
     }
     default:
       throw new Error(`Unknown wf command: ${name}`);
@@ -260,4 +308,36 @@ function snapshotHtml() {
     console.error(err);
     return '';
   }
+}
+
+function currentSelectionIds(cur = 'master') {
+  let frame = state.designer.current;
+  let ids = frame?.cursors?.[cur];
+  return ids ? [...ids] : [];
+}
+
+function firstSelectedElement(cur = 'master') {
+  let frame = state.designer.current;
+  let key = frame?.cursors?.[cur]?.[0];
+  return key ? frame.map.get(key) : null;
+}
+
+function getEventHandlersFromSelection(cur = 'master') {
+  let el = firstSelectedElement(cur);
+  if (!el) return [];
+  let handlers = [];
+  for (let attr of el.attributes) {
+    if (attr.name.startsWith('wf-on')) handlers.push({ name: attr.name.slice(5), expr: attr.value });
+  }
+  return handlers;
+}
+
+function buildDesignerResponse(result, cur, extra = {}) {
+  let selection = currentSelectionIds(cur);
+  let response = { success: result?.success !== false, selectedIds: result?.selectedIds ?? selection, ...extra };
+  if (result?.expr != null) response.expr = result.expr;
+  if (result?.handlers) response.handlers = result.handlers;
+  if (result?.missingIds) response.missingIds = result.missingIds;
+  if (result?.createdIds) response.createdIds = result.createdIds;
+  return response;
 }

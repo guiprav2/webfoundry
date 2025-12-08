@@ -109,9 +109,10 @@ const SUBCOMMANDS = {
     description: 'Replace classes matching an existing value (supports /regex/).',
     build: ({ flags, positionals }) => {
       let oldVal = flags.old || positionals.shift();
-      if (!oldVal) throw new Error('Specify --old <classOrRegex>.');
-      let classes = gatherClasses(flags, positionals);
-      return { name: 'replaceCssClasses', params: { old: oldVal, cls: classes, cur: flags.cur || 'master' } };
+      if (!oldVal) throw new Error('Specify --old "old class names".');
+      let newVal = flags.new || positionals.shift();
+      if (!newVal) throw new Error('Specify --new "new class names".');
+      return { name: 'replaceCssClasses', params: { old: oldVal, cls: newVal, cur: flags.cur || 'master' } };
     },
     format: formatSelectionResult,
   },
@@ -258,6 +259,7 @@ function makeCreateCommand(action, description) {
         tag: flags.tag || 'div',
         i: parseCount(flags.count),
         cur: flags.cur || 'master',
+        html: resolveOptionalHtml(flags),
       },
     }),
     format: formatCreatedResult,
@@ -330,7 +332,7 @@ function parseFlags(args) {
     let arg = args[i];
     if (arg.startsWith('--')) {
       let key = arg.slice(2);
-      if (!key) continue;
+      if (!key) throw new Error(`Invalid flag usage: ${arg}`);
       let next = args[i + 1];
       if (next && !next.startsWith('--')) {
         assignFlag(flags, key, next);
@@ -346,6 +348,8 @@ function parseFlags(args) {
 }
 
 function assignFlag(flags, key, value) {
+  key = key.trim();
+  if (!key) throw new Error('Flag name cannot be empty.');
   if (flags[key] === undefined) flags[key] = value;
   else if (Array.isArray(flags[key])) flags[key].push(value);
   else flags[key] = [flags[key], value];
@@ -438,11 +442,14 @@ function parseEventNames(flags, positionals) {
 }
 
 function resolveHtml(flags) {
-  let file = collectValues(flags.file)[0];
-  if (file) return fs.readFileSync(path.resolve(file), 'utf8');
   let html = collectValues(flags.html)[0];
   if (html != null) return html;
-  throw new Error('Provide --html "<markup>" or --file path/to/file when changing HTML.');
+  throw new Error('Provide --html "<markup>".');
+}
+
+function resolveOptionalHtml(flags) {
+  if (flags.html == null && flags.file == null) return undefined;
+  return resolveHtml(flags);
 }
 
 function printHelp() {

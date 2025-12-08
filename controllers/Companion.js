@@ -260,10 +260,10 @@ async function execWfCommand(command) {
       if (!action) throw new Error(`Unsupported action: ${name}`);
       let payload = { ...params, cur };
       let result = await action.handler(payload);
-      let selection = currentSelectionIds(cur);
-      let created = result?.createdIds ?? selection;
       let base = buildDesignerResponse(result, cur);
-      base.createdIds = created;
+      if (!base.createdIds || !base.createdIds.length) {
+        base.createdIds = inferCreatedIds(cur);
+      }
       return base;
     }
     case 'toggleHidden': {
@@ -346,4 +346,10 @@ function buildDesignerResponse(result, cur, extra = {}) {
   if (result?.missingIds) response.missingIds = result.missingIds;
   if (result?.createdIds) response.createdIds = result.createdIds;
   return response;
+}
+
+function inferCreatedIds(cur) {
+  let frame = state.designer.current;
+  if (!frame) return [];
+  return frame.cursors?.[cur] ? [...frame.cursors[cur]] : [];
 }

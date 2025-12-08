@@ -169,34 +169,56 @@ Webfoundry templates support **declarative bindings**:
 
 ## 🛠️ wf CLI Reference
 
-Codex CLI exposes a `wf` command that talks to the local Companion server. Use these subcommands for operations not covered by standard shell helpers:
+Codex CLI exposes a `wf` command that talks to the local Companion server. Commands fall into three groups; follow the noted syntax exactly.
 
-* `wf create-file pages/index.html` – create new files from Webfoundry templates (always use this instead of manual file creation for HTML/JS assets).
-* `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs for DOM edits); **no arguments allowed**.
-* `wf change-selection id1 id2` / `wf toggle-selection` – focus specific elements before running DOM tools; accepts only data-htmlsnap IDs.
-* `wf copy-selected` plus `wf paste-first-child|paste-last-child|paste-next-sibling|paste-prev-sibling` – duplicate elements relative to the current selection.
-* `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div] [--count 1]` – insert new structure.
+### Structure & Scaffolding
+
+* `wf create-file <relative/path>` – scaffold new files via Webfoundry templates (single positional path only).
+* `wf read-html` – print the current page snapshot (includes `data-htmlsnap` IDs); **no arguments allowed**.
+* `wf change-selection <id ...>` – select elements by data-htmlsnap ID (IDs only); use `wf toggle-selection` to restore the previous selection.
+* `wf copy-selected` – copy the current selection.
+* `wf paste-first-child|paste-last-child|paste-next-sibling|paste-prev-sibling [--count 1]` – paste relative to the selection.
+* `wf create-first-child|create-last-child|create-next-sibling|create-prev-sibling [--tag div | --html 'markup'] [--count 1]` – insert new nodes (use the --html option for non-layout nodes to speed things up)
 * `wf wrap [--tag div]` / `wf unwrap` / `wf delete-selected` – restructure or clear nodes.
-* `wf change-element-tag --tag span` / `wf change-element-id --id hero_title` – adjust element tags or IDs.
-* `wf change-html|change-inner-html --html "<...>"` – surgically replace outer/inner markup of the selection.
-* `wf add-css-classes|remove-css-classes <classes...>` / `wf replace-css-classes --old old --classes "new"` – adjust Tailwind classes.
-* `wf replace-text "New copy"` / `wf set-placeholder|set-href|set-src|set-input-value|set-form-method` – update attributes and bindings.
-* `wf toggle-hidden` – toggle the `hidden` attribute (useful with `wf-if` to declutter overlays).
-* `wf set-if-expr|set-map-expr|set-disabled --expr "!form.valid"` – update logic expressions.
-* `wf set-event-handlers handler=expr` / `wf add-event-handlers` / `wf rm-event-handlers` – manage element event handlers directly.
+* `wf change-html|change-inner-html --html '<markup>'` – replace outer/inner markup of the selection.
+
+### Styling & Attributes
+
+* `wf change-element-tag --tag span`
+* `wf change-element-id --id hero_title`
+* `wf add-css-classes class...`
+* `wf remove-css-classes class...`
+* `wf replace-css-classes --old old --classes "new"`
+* `wf replace-text "New copy"`
+* `wf set-placeholder "Placeholder text"`
+* `wf set-href https://example.com`
+* `wf set-src path/to/logo.svg [--expr state.app.logo]`
+* `wf set-input-value value --expr state.form.name`
+* `wf set-form-method --method post`
+* `wf toggle-hidden`
+
+### Logic & Events
+
+* `wf set-if-expr "state.app.ready"`
+* `wf set-map-expr "item of state.app.items"`
+* `wf set-disabled "!form.valid"`
+* `wf set-event-handlers click=post('app.save')`
+* `wf add-event-handlers click=post('app.save')`
+* `wf rm-event-handlers click change`
 
 All `wf` commands accept `--cur` to target a different designer cursor (defaults to `master`).
 
 ### Usage Notes & Validation Rules
 
 * Run `wf` commands from inside the Webfoundry project root (the folder that contains `wf.config.js`).
-* `wf create-file` takes exactly one positional argument: the relative path of the new file.
-* `wf read-html` takes *no* arguments. If it fails, ensure a page is open in the designer via `selectFile`.
+* `wf create-file` requires exactly one positional path; all other arguments must be explicit flags.
+* `wf read-html` takes **no arguments**. If it fails, ensure a page is open via `selectFile`.
 * `wf change-selection` accepts only data-htmlsnap IDs—do **not** supply file paths or flags such as `--file`.
 * DOM operations (create, paste, wrap, attribute changes, etc.) operate on the currently selected elements. Open a page with `selectFile` and immediately `wf change-selection` the root or target node before editing.
 * Event handler commands expect `event=expression` pairs (e.g. `wf add-event-handlers click=post('app.handleClick')`).
 * When a command reports missing IDs, refresh your snapshot with `wf read-html` before retrying.
-* Avoid text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands.
+* Chain multiple `wf` commands using && when the commands are closely related, speeding things up and making changes look more atomic.
+* *NEVER* use text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands.
 
 ---
 

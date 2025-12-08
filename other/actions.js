@@ -1042,11 +1042,12 @@ let actions = window.actions = {
       properties: {
         cur: { type: 'string', description: `Relative to whose cursor (defaults to master)` },
         tag: { type: 'string', description: `Tag name to create (defaults to div)` },
+        html: { type: 'string', description: `Optional HTML to use for the new node(s) instead of an empty element` },
         i: { type: 'number', description: `How many to create (defaults to 1)` },
       },
     },
-    handler: async ({ cur = 'master', tag = 'div', i = 1 } = {}) => {
-      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createNextSibling', cur, tag, i });
+    handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createNextSibling', cur, tag, html, i });
       let frame = state.designer.current;
       if (frame.cursors[cur].length !== 1) return;
       let ref = frame.map.get(frame.cursors[cur][0]);
@@ -1061,13 +1062,23 @@ let actions = window.actions = {
             if (!ref) return [];
             let made = [];
             for (let n = 0; n < args.count; n++) {
-              let el = document.createElement(args.tag);
-              ref.insertAdjacentElement('afterend', el);
-              made.push(el);
+              if (args.html && args.html.trim()) {
+                let tpl = document.createElement('template');
+                tpl.innerHTML = args.html;
+                let nodes = [...tpl.content.childNodes].reverse();
+                for (let node of nodes) {
+                  ref.parentElement.insertBefore(node, ref.nextSibling);
+                  if (node.nodeType === 1) made.push(node);
+                }
+              } else {
+                let el = document.createElement(args.tag);
+                ref.insertAdjacentElement('afterend', el);
+                made.push(el);
+              }
             }
             await new Promise(pres => setTimeout(pres));
             return made.map(x => state.map.getKey(x));
-          }, { refKey, tag, count: i });
+          }, { refKey, tag, html, count: i });
           await actions.changeSelection.handler({ cur, s: createdKeys });
         } else if (apply) {
           await ifeval(({ args }) => {
@@ -1098,10 +1109,11 @@ let actions = window.actions = {
       properties: {
         cur: { type: 'string', description: `Relative to whose cursor (defaults to master)` },
         tag: { type: 'string', description: `Tag name to create (defaults to div)` },
+        html: { type: 'string', description: `Optional HTML to use for the new node(s) instead of an empty element` },
         i: { type: 'number', description: `How many to create (defaults to 1)` },
       },
     },
-    handler: async ({ cur = 'master', tag = 'div', i = 1 } = {}) => {
+    handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createPrevSibling', cur, tag, i });
       let frame = state.designer.current;
       if (frame.cursors[cur].length !== 1) return;
@@ -1117,13 +1129,23 @@ let actions = window.actions = {
             if (!ref) return [];
             let made = [];
             for (let n = 0; n < args.count; n++) {
-              let el = document.createElement(args.tag);
-              ref.insertAdjacentElement('beforebegin', el);
-              made.push(el);
+              if (args.html && args.html.trim()) {
+                let tpl = document.createElement('template');
+                tpl.innerHTML = args.html;
+                let nodes = [...tpl.content.childNodes];
+                for (let node of nodes) {
+                  ref.parentElement.insertBefore(node, ref);
+                  if (node.nodeType === 1) made.push(node);
+                }
+              } else {
+                let el = document.createElement(args.tag);
+                ref.insertAdjacentElement('beforebegin', el);
+                made.push(el);
+              }
             }
             await new Promise(pres => setTimeout(pres));
             return made.map(x => state.map.getKey(x));
-          }, { refKey, tag, count: i });
+          }, { refKey, tag, html, count: i });
           await actions.changeSelection.handler({ cur, s: createdKeys });
         } else if (apply) {
           await ifeval(({ args }) => {
@@ -1154,11 +1176,12 @@ let actions = window.actions = {
       properties: {
         cur: { type: 'string', description: `Relative to whose cursor (defaults to master)` },
         tag: { type: 'string', description: `Tag name to create (defaults to div)` },
+        html: { type: 'string', description: `Optional HTML for created node(s)` },
         i: { type: 'number', description: `How many to create (defaults to 1)` },
       },
     },
-    handler: async ({ cur = 'master', tag = 'div', i = 1 } = {}) => {
-      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createLastChild', cur, tag, i });
+    handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createLastChild', cur, tag, html, i });
       let frame = state.designer.current;
       if (frame.cursors[cur].length !== 1) return;
       let parent = frame.map.get(frame.cursors[cur][0]);
@@ -1173,13 +1196,23 @@ let actions = window.actions = {
             if (!parent) return [];
             let made = [];
             for (let n = 0; n < args.count; n++) {
-              let el = document.createElement(args.tag);
-              parent.insertAdjacentElement('beforeend', el);
-              made.push(el);
+              if (args.html && args.html.trim()) {
+                let tpl = document.createElement('template');
+                tpl.innerHTML = args.html;
+                let nodes = [...tpl.content.childNodes];
+                for (let node of nodes) {
+                  parent.appendChild(node);
+                  if (node.nodeType === 1) made.push(node);
+                }
+              } else {
+                let el = document.createElement(args.tag);
+                parent.insertAdjacentElement('beforeend', el);
+                made.push(el);
+              }
             }
             await new Promise(pres => setTimeout(pres));
             return made.map(x => state.map.getKey(x));
-          }, { parentKey, tag, count: i });
+          }, { parentKey, tag, html, count: i });
           await actions.changeSelection.handler({ cur, s: createdKeys });
         } else if (apply) {
           await ifeval(({ args }) => {
@@ -1210,11 +1243,12 @@ let actions = window.actions = {
       properties: {
         cur: { type: 'string', description: `Relative to whose cursor (defaults to master)` },
         tag: { type: 'string', description: `Tag name to create (defaults to div)` },
+        html: { type: 'string', description: `Optional HTML for created node(s)` },
         i: { type: 'number', description: `How many to create (defaults to 1)` },
       },
     },
-    handler: async ({ cur = 'master', tag = 'div', i = 1 } = {}) => {
-      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createFirstChild', cur, tag, i });
+    handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createFirstChild', cur, tag, html, i });
       let frame = state.designer.current;
       if (frame.cursors[cur].length !== 1) return;
       let parent = frame.map.get(frame.cursors[cur][0]);
@@ -1229,13 +1263,23 @@ let actions = window.actions = {
             if (!parent) return [];
             let made = [];
             for (let n = 0; n < args.count; n++) {
-              let el = document.createElement(args.tag);
-              parent.insertAdjacentElement('afterbegin', el);
-              made.push(el);
+              if (args.html && args.html.trim()) {
+                let tpl = document.createElement('template');
+                tpl.innerHTML = args.html;
+                let nodes = [...tpl.content.childNodes].reverse();
+                for (let node of nodes) {
+                  parent.insertBefore(node, parent.firstChild);
+                  if (node.nodeType === 1) made.push(node);
+                }
+              } else {
+                let el = document.createElement(args.tag);
+                parent.insertAdjacentElement('afterbegin', el);
+                made.push(el);
+              }
             }
             await new Promise(pres => setTimeout(pres));
             return made.map(x => state.map.getKey(x));
-          }, { parentKey, tag, count: i });
+          }, { parentKey, tag, html, count: i });
           await actions.changeSelection.handler({ cur, s: createdKeys });
         } else if (apply) {
           await ifeval(({ args }) => {
@@ -2137,7 +2181,7 @@ let actions = window.actions = {
     },
   },
 
-  change: {
+  changeHtml: {
     description: `Changes the outer HTML of selected elements (prompts if not provided)`,
     shortcut: 'm',
     disabled: ({ cur = 'master' } = {}) => [
@@ -2203,6 +2247,9 @@ let actions = window.actions = {
           await actions.changeSelection.handler({ cur, s: orderKeys });
         }
       });
+      let selectionIds = [...(frame.cursors[cur] || [])];
+      let created = addedKeys.length ? addedKeys : selectionIds;
+      return { success: true, createdIds: created, selectedIds: selectionIds };
     },
   },
 
@@ -2262,6 +2309,7 @@ let actions = window.actions = {
         }, { targets: targetKeys, html, prev, apply });
         await actions.changeSelection.handler({ cur, s: targetKeys });
       });
+      return { success: true, selectedIds: targetKeys };
     },
   },
 

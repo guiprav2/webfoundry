@@ -203,7 +203,7 @@ async function execWfCommand(command) {
   switch (name) {
     case 'readHtml': {
       if (!state.designer.current?.ready) return { success: false, error: `Designer closed`, hint: `Use selectFile to open the desired HTML file for editing first` };
-      return { html: snapshotHtml() };
+      return { success: true, html: snapshotHtml() };
     }
     case 'changeSelection': {
       let ids = params.ids;
@@ -225,6 +225,16 @@ async function execWfCommand(command) {
         selectedIds: res?.selectedIds ?? selection,
         missingIds: res?.missingIds ?? [],
       };
+    }
+    case 'selectFile': {
+      let action = actions[name];
+      let reasons = action.disabled?.(params)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        return { success: false, error: lines.join('\n') };
+      }
+      let result = await action.handler(params);
+      return result === undefined ? { success: true } : result;
     }
     case 'createFile': {
       let action = actions[name];

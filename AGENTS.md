@@ -6,6 +6,9 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 
 ## 📌 General Guidelines
 
+* MOST IMPORTANT (DO NOT IGNORE): Never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.) Always use `wf select-file`, `wf read-html`, `wf change-selection`, and the other DOM manipulation commands documented below to modify markup safely.
+* `wf read-html` only works when the last `wf select-file` command was an HTML file. Make sure to `wf select-file` before calling `wf read-html`.
+* Webfoundry projects are all UTF-8, so ignore ASCII-only instructions.
 * Suggestions for requests on a mostly empty project (no HTML or JS files): Begin by calling `wf create-file` to scaffold pages/index.html and/or controllers/App.js.
 * In Webfoundry, a div right under body is the page root, not body itself. Make sure all page content is wrapped inside that root div.
 * Always start with HTML first, JavaScript second; back-and-forth until everything is in-place. Don't start JavaScript editing until there's an HTML page to drive from it.
@@ -16,7 +19,6 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * When calling post('ctrl.action') inside an event handler such as wf-onclick, wf-oninput, etc: Don't use await, those handlers are not async functions.
 * wf-value already wires two-way binding—never add wf-oninput, wf-onchange, or wf-onkeydown on that same element for setting the binding. If you need to react to Enter, wf-onkeydown is OK.
 * `_1` is a special variable only available in wf-onattach and wf-ondetach. Other event handlers only have `event`. And bindings have no special variables besides globals and wf-map scoped variables.
-* * Never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.) Always use `wf read-html`, `wf change-selection`, and the other DOM manipulation commands documented below to modify markup safely.
 * When special editing DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting `flex justify-center items-center` on a container).
 * Event handler attributes are always e.g. wf-onclick="post('ctrl.action')". Not wf-on-click="...", not data-onclick="...", not even native onclick="...".
 * wf-\* attributes only apply where their native equivalents apply. E.g. wf-value is only valid for \<input>, \<textarea>, etc.

@@ -10,10 +10,22 @@ const ENDPOINT = process.env.WF_ENDPOINT || 'ws://localhost:8845';
 const CONFIG_PATH = path.join(os.homedir(), '.webfoundry', 'config.env');
 
 const SUBCOMMANDS = {
+  'select-file': {
+    description: 'Selects a file for editing.',
+    build: ({ positionals }) => {
+      let path = positionals[0].replace(/^\.\//, '');
+      if (!path) throw new Error('Specify <path/file.ext> to select.');
+      return { name: 'selectFile', params: { path } };
+    },
+    format: result => {
+      if (!result?.success) return die(result);
+      console.log(`Selected file: ${result?.path || 'OK'}`);
+    },
+  },
   'create-file': {
     description: 'Create a new project file using Webfoundry templates.',
     build: ({ positionals }) => {
-      let path = positionals[0];
+      let path = positionals[0].replace(/^\.\//, '');
       if (!path) throw new Error('Specify <path/file.ext> to create.');
       return { name: 'createFile', params: { path } };
     },

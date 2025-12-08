@@ -35,6 +35,7 @@ export default async function codex(logs, { apiKey, instructions, rolemap, pream
       let ctools = [...Object.entries(typeof tools === 'function' ? tools() || {} : tools || {})]
         .filter(xs => typeof xs[1] === 'function' ? xs[1]() : xs[1])
         .map(([name, spec]) => ({ type: 'function', name, parameters: {}, ...(typeof spec === 'function' ? spec() : spec), handler: undefined }));
+      for (let [i, x] of ctools.entries()) ctools[i] = resolve(x);
       //console.log(ctools.map(x => `- ${x.name}: ${x.description}`).join('\n'));
       let payload = {
         model: state.files.current?.endsWith?.('.html') ? 'gpt-5.1' : 'gpt-5.1-codex',

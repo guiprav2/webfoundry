@@ -16,6 +16,26 @@ let TEXT_COLOR_RE = new RegExp(`^text-(${TAILWIND_HUES.join('|')})-(${TAILWIND_S
 let BG_COLOR_RE = new RegExp(`^bg-(${TAILWIND_HUES.join('|')})-(${TAILWIND_SHADES.join('|')})$`);
 let DEFAULT_SHADE = '500';
 
+function getProjectPaths({ includeDirectories = false, excludeCurrent = false } = {}) {
+  if (!state.projects?.current) return [];
+  let entries = state.files?.list || [];
+  let current = excludeCurrent ? state.files?.current : null;
+  let found = [];
+  for (let entry of entries) {
+    if (!Array.isArray(entry)) continue;
+    let [name, dir, isDir] = entry;
+    if (!includeDirectories && isDir) continue;
+    if (typeof name !== 'string') continue;
+    let base = typeof dir === 'string' ? dir : '';
+    let path = joinPath(base, name) || name || '';
+    if (!path) continue;
+    if (isDir && includeDirectories) path = `${path.replace(/\/+$/, '')}/`;
+    if (excludeCurrent && current && path === current) continue;
+    found.push(path);
+  }
+  return [...new Set(found)].sort();
+}
+
 let actions = window.actions = {
   selectPanel: {
     description: `Only use upon user request or as a means to call user attention to something`,
@@ -176,13 +196,21 @@ let actions = window.actions = {
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't select files.`,
     ],
-    parameters: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: `Full path to select` },
-      },
+    parameters: () => {
+      let options = getProjectPaths({ includeDirectories: false, excludeCurrent: true });
+      let pathProp = { type: 'string', description: `Full path to select` };
+      if (options.length) pathProp.enum = options;
+      return {
+        type: 'object',
+        properties: { path: pathProp },
+      };
     },
-    handler: async ({ path }) => await post('files.select', path),
+    handler: async ({ path }) => {
+      if (!path) throw new Error('No file specified.');
+      if (path === state.files.current) return { success: true, path, note: 'File already selected.' };
+      await post('files.select', path);
+      return { success: true, path };
+    },
   },
 
   getFileLineCount: {
@@ -230,7 +258,7 @@ let actions = window.actions = {
       let resolvedEnd = endLine;
       if (count != null) {
         let span = Number(count);
-        if (!Number.isFinite(span) || span < 1) throw new Error('count must be a positive integer.');
+        if (!Number.isFinite(span) || span < 0) throw new Error('count must be a positive integer.');
         span = Math.floor(span);
         resolvedEnd = start + span - 1;
       }
@@ -341,16 +369,21 @@ let actions = window.actions = {
       !state.projects.current && `Project not open`,
       state.collab.uid !== 'master' && `Peers can't read files.`,
     ],
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: `Substring to search for (required)` },
-        context: { type: 'number', description: `Number of context lines to include before and after each match (defaults to 2)` },
-        caseSensitive: { type: 'boolean', description: `If true, match using case-sensitive comparison (defaults to false)` },
-        paths: { type: 'array', items: { type: 'string' }, description: `Optional list of file paths to limit the search (don't forget file extensions)` },
-        maxResults: { type: 'number', description: `Maximum number of matches to return (defaults to 20)` },
-      },
-      required: ['query'],
+    parameters: () => {
+      let fileOptions = getProjectPaths({ includeDirectories: false });
+      let pathItem = { type: 'string' };
+      if (fileOptions.length) pathItem.enum = fileOptions;
+      return {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: `Substring to search for (required)` },
+          context: { type: 'number', description: `Number of context lines to include before and after each match (defaults to 2)` },
+          caseSensitive: { type: 'boolean', description: `If true, match using case-sensitive comparison (defaults to false)` },
+          paths: { type: 'array', items: pathItem, description: `Optional list of file paths to limit the search (don't forget file extensions)` },
+          maxResults: { type: 'number', description: `Maximum number of matches to return (defaults to 20)` },
+        },
+        required: ['query'],
+      };
     },
     handler: async ({ query, context = 2, caseSensitive = false, paths = [], maxResults = 20 } = {}) => {
       let textQuery = query == null ? '' : String(query);
@@ -2988,10 +3021,12 @@ let actions = window.actions = {
 
 ## General
 
-- If request is to port an application to Webfoundry, begin by reading files to be ported. Replicate design and functionality exactly, do not adapt. If original project uses different stack (e.g. TypeScript, SCSS) port them to Webfoundry stack (i.e. plain JavaScript, Tailwind):
+- Call listFiles once at the start of each run to understand the project tree, then move on to concrete edits.
+- When porting an application to Webfoundry, read the source files and replicate their structure, content, and behavior exactly—only redesign when the user explicitly asks; if the original stack differs (TypeScript, SCSS, etc.), translate it into Webfoundry conventions (plain JavaScript, Tailwind).
 - If the project is empty or missing core assets, immediately create pages/index.html and, when JavaScript is needed, controllers/App.js via createFile.
-- After opening an HTML page with placeholder markup (a div that says "Component intentionally left blank"), select the it with changeSelection and delete it (deleteSelected), then use the DOM editing tools (createFirstChild/createNextSibling/addCssClasses/replaceTextContent/etc) to build the layout.
-- Avoid falling into loops that repeat listFiles, listProjects, or selectPanel when they do not advance the user's request.
+- After opening an HTML page with placeholder markup (the div that says "Component intentionally left blank"), select it with changeSelection, delete it (deleteSelected), then use the DOM editing tools (createFirstChild/createNextSibling/addCssClasses/replaceTextContent/etc.) to build the layout.
+- Before making large structural edits, gather the relevant snippets with readFileLines or searchFilesSubstring so you can reference them directly while editing.
+- Avoid falling into loops that repeat listFiles, listProjects, selectFile, or selectPanel when they do not advance the user's request.
 
 ## Editing constraints
 

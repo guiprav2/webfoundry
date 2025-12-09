@@ -9,10 +9,14 @@ export default class Assistant {
     init: async () => {
       let { bus } = state.event;
       this.state.doc = new DOMParser().parseFromString('<!doctype html><head></head><body><div></div></body>', 'text/html');
-      bus.on('designer:htmlsnap:ready', ({ frame }) => {
-        this.state.doc.head.innerHTML = frame.head.innerHTML;
-        this.state.doc.body.firstElementChild.outerHTML = frame.body.firstElementChild.outerHTML;
-      });
+      for (let x of ['designer:htmlsnap:ready', 'designer:select:ready', 'files:select:ready']) {
+        bus.on(x, ({ frame, path }) => {
+          frame ??= state.designer.list.find(x => x.path === path);
+          if (!frame?.ready) return;
+          this.state.doc.head.innerHTML = frame.head.innerHTML;
+          this.state.doc.body.firstElementChild.outerHTML = frame.body.firstElementChild.outerHTML;
+        });
+      }
       bus.on('projects:create:ready', async () => {
         if (!this.state.tutorial || this.state.tutorial.includes('bravo')) return;
         await this.state.session.prompt('cue bravo');

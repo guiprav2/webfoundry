@@ -861,6 +861,7 @@ let actions = window.actions = {
       for (let id of requested) {
         let el = frame.map.get(id);
         if (!el || !frame.root.contains(el)) {
+          console.log(id, el);
           missing.push(id);
           continue;
         }

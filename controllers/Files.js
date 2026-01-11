@@ -56,8 +56,7 @@ export default class Files {
       });
 
       window.addEventListener('message', async ev => {
-        let { type, project, path } = ev.data || {};
-        if (type !== 'fetch') return;
+        let { rpcid, type, project, path, contents } = ev.data || {};
         if (location.origin !== ev.origin) {
           let url = new URL(ev.origin);
           let parts = url.hostname.split('.');
@@ -66,8 +65,16 @@ export default class Files {
           if (!/^webfoundry.app|webfoundry\d+\.netlify\.app|localhost$/.test(domain)) return;
           if (state.projects.current?.replaceAll?.(':', '-') !== project) return; // FIXME: Also check path.
         }
-        if (!ev.source || typeof ev.source.postMessage !== 'function') return;
-        await respond({ project, path }, payload => ev.source.postMessage(payload, ev.origin));
+        if (type === 'fetch') {
+          if (!ev.source || typeof ev.source.postMessage !== 'function') return;
+          await respond({ project, path }, payload => ev.source.postMessage(payload, ev.origin));
+        }
+        if (type === 'write') {
+          if (!path.startsWith('data/')) return await ev.source.postMessage({ rpcid, type: 'write:res', success: false, error: `Cannot write outside data/` });
+          await rfiles.save(project, path, unb64(contents, mimeLookup(path)));
+          await post('files.load');
+          await ev.source.postMessage({ rpcid, type: 'write:res', success: true }, ev.origin);
+        }
       });
       if (state.collab.uid !== 'master') return;
       bus.on('projects:select:ready', async ({ project }) => await loadman.run('files.projectSelect', async () => {
@@ -171,10 +178,9 @@ export default class Files {
       d.updateSync();
       bus.emit('files:select:ready', { project, path });
       if (path?.endsWith?.('.html')) await new Promise((pres, prej) => {
-        console.log(1);
-        if (state.designer.list.find(x => x.path === path && x.ready)) { console.log(1.5); return pres() }
-        state.event.bus.on('designer:select:ready', () => (console.log(2), pres()));
-        state.event.bus.on('designer:select:error', () => (console.log(3), prej()));
+        if (state.designer.list.find(x => x.path === path && x.ready)) { return pres() }
+        state.event.bus.on('designer:select:ready', () => pres());
+        state.event.bus.on('designer:select:error', () => prej());
       });
     },
 

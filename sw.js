@@ -14,14 +14,62 @@ self.addEventListener('message', async ev => {
   if (data.type !== 'webfoundry-register-tab') return;
   await storeTab(data.tabId, ev.source.id);
 });
-self.addEventListener('fetch', async ev => {
+self.addEventListener('fetch', ev => {
   let url = new URL(ev.request.url);
+  if (ev.request.mode === 'navigate') {
+    ev.respondWith((async () => {
+      let cache = await caches.open('webfoundry-pages');
+      try {
+        let res = await fetch(ev.request);
+        ev.request.method === 'GET' && cache.put(url.href, res.clone());
+        return res;
+      } catch (err) {
+        let cached = await cache.match(url.href);
+        if (cached) return cached;
+        throw err;
+      }
+    })());
+    return;
+  }
   if (url.searchParams.get('isolate') != null) return;
+  if (url.origin !== self.location.origin) {
+    ev.respondWith((async () => {
+      let cache = await caches.open('webfoundry-external');
+      let cached = await cache.match(url.href);
+      if (cached) return cached;
+      try {
+        let res = await fetch(ev.request);
+        if (res && (res.ok || res.type === 'cors' || res.type === 'opaque') && ev.request.method === 'GET') { cache.put(url.href, res.clone()) }
+        return res;
+      } catch (err) {
+        let fallback = await cache.match(url.href);
+        if (fallback) return fallback;
+        if (url.origin.includes('clarity.ms')) return new Response('');
+        throw err;
+      }
+    })());
+    return;
+  }
   let pathname = url.pathname;
   if (url.port && pathname.endsWith('.html')) return;
   let prefix = null;
   if (pathname.startsWith('/files/')) prefix = '/files/';
   else if (pathname.startsWith('/preview/')) prefix = '/preview/';
+  if (!prefix && ev.request.method === 'GET') {
+    ev.respondWith((async () => {
+      const cache = await caches.open('webfoundry-internal');
+      try {
+        const res = await fetch(ev.request);
+        cache.put(url.href, res.clone());
+        return res;
+      } catch (err) {
+        const cached = await cache.match(url.href);
+        if (cached) return cached;
+        throw err;
+      }
+    })());
+    return;
+  }
   if (prefix) {
     let securityResponse = (body, init = {}) => {
       let headers = new Headers(init.headers || {});
@@ -54,11 +102,11 @@ self.addEventListener('fetch', async ev => {
     let cache = await caches.open('webfoundry-dynamic');
     try {
       let res = await fetch(ev.request);
-      if (res?.type === 'opaque' || res?.type === 'cors' || res?.ok) cache.put(ev.request, res.clone());
+      if (res?.type === 'opaque' || res?.type === 'cors' || res?.ok) cache.put(url.href, res.clone());
       return res;
     } catch (err) {
       console.error(err);
-      let cached = await cache.match(ev.request);
+      let cached = await cache.match(url.href);
       if (cached) return cached;
       return new Response('Offline and not cached', { status: 503 });
     }

@@ -158,6 +158,8 @@ export default class Designer {
 
     select: async path => {
       if (this.state.list.find(x => x.path === path) || !path?.endsWith?.('.html')) return;
+      state.app.docs = false;
+      d.update();
       let { bus } = state.event;
       let project = state.projects.current;
       let p = Promise.withResolvers();

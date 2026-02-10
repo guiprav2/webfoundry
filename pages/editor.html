@@ -104,6 +104,12 @@
         ></button>
 
         <button
+          class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 IconsSidebar-docsBtn nf-oct-book"
+          wf-class='{{state.app.docs &amp;&amp; "bg-black/70"}}'
+          wf-onclick="state.app.docs = !state.app.docs"
+          value=""
+        ></button
+        ><button
           class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 nf-md-dots_vertical_circle IconsSidebar-settingsBtn"
           wf-class="{{state.app.panel === 'settings' &amp;&amp; 'bg-black/70'}}"
           wf-onclick="post('app.selectPanel', 'settings')"
@@ -3457,7 +3463,7 @@
             </div>
           </div>
 
-          <div class="flex flex-1" id="Canvas">
+          <div class="flex flex-1" id="Canvas" wf-if="!state.app.docs">
             <div
               class="flex justify-center items-center px-16 flex-1 select-none bg-black/40 backdrop-blur-[2px]"
               wf-class="{{!state.app.brandCanvas &amp;&amp; 'hidden'}}"
@@ -3541,6 +3547,498 @@
               class="min-w-96 flex flex-col flex-1 bg-[#091017c0] backdrop-blur-[4px]"
               wf-if="state.app.panel === 'db' &amp;&amp; state.db.current"
             ></div>
+          </div>
+          <div
+            class="DocsPanel flex flex-col text-neutral-100 border-r border-black/50 select-none shrink-0 overflow-auto bg-[#091017c0] backdrop-blur-[4px] w-full"
+            wf-if="state.app.docs"
+            wf-class='{{replaces w-96: state.app.demo ? "w-64" : "w-96"}}'
+          >
+            <div class="px-4 py-3 border-b border-black/50 text-lg">
+              Documentation
+            </div>
+            <div class="p-4 text-sm space-y-3 text-neutral-300">
+              <div class="w-full space-y-8 text-neutral-300">
+                <div>
+                  Your visual editor for building pages without hand-editing
+                  HTML. Use the sidebar for navigation, the top toolbar for
+                  actions, and side panels for details. Many controls are
+                  context-aware and may be hidden until certain conditions are
+                  met.
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">Orientation</div>
+                  <div>
+                    Start by locating two key UI areas. This documentation
+                    reacts to state and explains when items are hidden and how
+                    to reveal them.
+                  </div>
+
+                  <div
+                    class="w-full rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                  >
+                    <div class="text-sm font-semibold text-neutral-200 mb-2">
+                      Icons Sidebar
+                    </div>
+                    <div
+                      class="flex items-center gap-1 p-2 border border-black/40 rounded bg-[#060a0fc0] backdrop-blur-[4px] *:shrink-0 w-full overflow-x-auto"
+                    >
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-sitemap border border-black/50 bg-black/70 text-neutral-100"
+                        title="Projects"
+                        value=""
+                      ></button>
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-folder border border-black/50 bg-black/70 text-neutral-100"
+                        title="Files"
+                        value=""
+                      ></button>
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-paint_brush border border-black/50 bg-black/70 text-neutral-100"
+                        title="Styles"
+                        value=""
+                      ></button>
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-seti-db border border-black/50 bg-black/70 text-neutral-100"
+                        title="Database"
+                        value=""
+                      ></button>
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-oct-command_palette border border-black/50 bg-black/70 text-neutral-100"
+                        title="Shell"
+                        value=""
+                      ></button>
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-play border border-black/50 bg-black/70 text-neutral-100"
+                        title="Preview"
+                        value=""
+                      ></button>
+
+                      <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-oct-book border border-black/50 bg-black/70 text-emerald-300"
+                        title="Documentation"
+                        value=""
+                      ></button
+                      ><button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-md-dots_vertical_circle border border-black/50 bg-black/70 text-neutral-100"
+                        title="Settings"
+                        value=""
+                      ></button>
+                      <div
+                        class="flex items-center gap-2 ml-3 text-emerald-300"
+                      >
+                        <span class="nf nf-fa-arrow_left"></span
+                        ><span>You're here!</span>
+                      </div>
+                    </div>
+                    <div class="mt-2 text-xs text-cyan-400">
+                      <span class="nf-fa-warning nf"></span> Visibility depends
+                      on context — notes below describe conditions.
+                    </div>
+                    <div class="mt-1 space-y-1 text-xs text-cyan-400">
+                      <div wf-if="!state.projects.current">
+                        <span class="nf nf-fa-folder"></span> Files is hidden —
+                        open/create a project via
+                        <span class="nf nf-fa-sitemap"></span> Projects →
+                        Open/Create.
+                      </div>
+                      <div
+                        wf-if="state.projects.current &amp;&amp; loadman.ops['files.load']?.length"
+                      >
+                        <span class="nf nf-fa-folder"></span> Files is loading…
+                        please wait.
+                      </div>
+                      <div wf-if="!state.designer.open">
+                        <span class="nf nf-fa-paint_brush"></span> Styles is
+                        hidden — open a page under
+                        <span class="font-mono">pages/</span> from
+                        <span class="nf nf-fa-folder"></span> Files.
+                      </div>
+                      <div
+                        wf-if="state.designer.open &amp;&amp; state.designer.current?.preview"
+                      >
+                        <span class="nf nf-fa-paint_brush"></span> Styles is
+                        hidden while in
+                        <span class="nf nf-fa-pause"></span> Preview — click
+                        <span class="nf nf-fa-pause"></span> Pause to return to
+                        editing.
+                      </div>
+                      <div
+                        wf-if="!state.designer.open || !(String(state.files.current||'').startsWith('pages/'))"
+                      >
+                        <span class="nf nf-fa-play"></span> Preview is hidden —
+                        open a page under
+                        <span class="font-mono">pages/</span> from
+                        <span class="nf nf-fa-folder"></span> Files.
+                      </div>
+                      <div
+                        wf-if="state.designer.open &amp;&amp; String(state.files.current||'').startsWith('pages/') &amp;&amp; !state.designer.current?.preview"
+                      >
+                        <span class="nf nf-fa-play"></span> Preview is visible;
+                        <span class="nf nf-fa-pause"></span> Pause is hidden —
+                        click Preview to enter Preview mode.
+                      </div>
+                      <div wf-if="state.designer.current?.preview">
+                        <span class="nf nf-fa-pause"></span> Pause is visible;
+                        <span class="nf nf-fa-play"></span> Preview is hidden —
+                        click Pause to return to editing.
+                      </div>
+                      <div
+                        wf-if="!/^connected|auth_fail$/.test(state.companion.client?.status || '') &amp;&amp; !state.shell.list.length"
+                      >
+                        <span class="nf nf-oct-command_palette"></span> Shell is
+                        hidden — start the Companion server to enable it, or
+                        open an existing shell tab.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="w-full rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                  >
+                    <div class="text-sm font-semibold text-neutral-200 mb-2">
+                      Top Toolbar
+                    </div>
+                    <div
+                      class="flex items-center gap-2 p-2 border border-black/40 rounded bg-[#060a0fc0] backdrop-blur-[4px] text-neutral-100 w-full overflow-x-auto"
+                    >
+                      <div
+                        class="px-3 py-1 rounded bg-black/60 flex items-center gap-2 w-36 justify-between"
+                      >
+                        <span class="text-sm">Manipulation</span
+                        ><span
+                          class="nf nf-fa-angle_down relative top-0.5"
+                        ></span>
+                      </div>
+                      <div
+                        class="px-3 py-1 rounded bg-black/60 flex items-center gap-2 w-24 justify-between"
+                      >
+                        <span class="text-sm">Tailwind</span
+                        ><span
+                          class="nf nf-fa-angle_down relative top-0.5"
+                        ></span>
+                      </div>
+                      <div
+                        class="px-3 py-1 rounded bg-black/60 flex items-center gap-2 w-36 justify-between"
+                      >
+                        <span class="text-sm">Text &amp; Media</span
+                        ><span
+                          class="nf nf-fa-angle_down relative top-0.5"
+                        ></span>
+                      </div>
+                      <div
+                        class="px-3 py-1 rounded bg-black/60 flex items-center gap-2 w-32 justify-between"
+                      >
+                        <span class="text-sm">JavaScript</span
+                        ><span
+                          class="nf nf-fa-angle_down relative top-0.5"
+                        ></span>
+                      </div>
+                    </div>
+                    <div class="mt-2 text-xs text-neutral-400">
+                      Replace text, wrap/un-wrap, create siblings/children, and
+                      swap media/backgrounds.
+                    </div>
+                    <div class="mt-2 text-xs text-cyan-400">
+                      <span class="nf-fa-warning nf"></span> Visibility depends
+                      on context — notes below describe conditions.
+                    </div>
+                    <div class="mt-1 space-y-1 text-xs text-cyan-400">
+                      <div
+                        wf-if="!state.designer.open || !(String(state.files.current||'').startsWith('pages/'))"
+                      >
+                        <span class="nf nf-fa-angle_down"></span> Toolbar is
+                        hidden — open a page under
+                        <span class="font-mono">pages/</span> from
+                        <span class="nf nf-fa-folder"></span> Files.
+                      </div>
+                      <div wf-if="state.designer.current?.preview">
+                        <span class="nf nf-fa-pause"></span> Exit Preview to
+                        reveal the toolbar.
+                      </div>
+                      <div wf-if="!state.settings.opt?.toolbar">
+                        <span class="nf nf-md-dots_vertical_circle"></span>
+                        Enable “Toolbar” in
+                        <span class="nf nf-md-dots_vertical_circle"></span>
+                        Settings.
+                      </div>
+                      <div wf-if="state.app.demo">
+                        <span class="nf nf-fa-exclamation_triangle"></span>
+                        Toolbar is hidden in demo mode.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">Your First Page</div>
+                  <div>
+                    When you open a new project, the default page is
+                    intentionally blank. Here is how to begin:
+                  </div>
+                  <ol class="list-decimal pl-5 space-y-1">
+                    <li>
+                      Click <span class="nf nf-fa-folder"></span>
+                      <span class="font-mono">Files</span> and create/open a
+                      page under <span class="font-mono">pages/</span> (e.g.,
+                      <span class="font-mono">pages/index.html</span>).
+                    </li>
+                    <li>
+                      On the canvas, click to ensure the page root (the
+                      <span class="font-mono">&lt;div&gt;</span> directly under
+                      <span class="font-mono">&lt;body&gt;</span>) is selected.
+                    </li>
+                    <li>
+                      Open <span class="nf nf-fa-angle_down"></span>
+                      <span class="font-mono">Manipulation</span> →
+                      <span class="font-mono">Create First Child</span> to add
+                      your first element.
+                    </li>
+                  </ol>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Build a Header From Scratch
+                  </div>
+                  <div>
+                    Follow these exact visual steps. Everything is done from the
+                    toolbar and
+                    <span class="nf nf-fa-paint_brush"></span> Styles panel.
+                  </div>
+                  <ol class="list-decimal pl-5 space-y-2">
+                    <li>
+                      <span class="text-neutral-100"
+                        >Create a header wrapper</span
+                      >: With the page root selected, choose
+                      <span class="font-mono">Create First Child</span> in the
+                      toolbar. Then in the
+                      <span class="font-mono">&lt;div&gt;</span> dropdown,
+                      change the tag to <span class="font-mono">header</span>.
+                      Add classes in <span class="font-mono">Styles</span>:
+                      <span class="font-mono">bg-slate-900</span>.
+                    </li>
+                    <li>
+                      <span class="text-neutral-100"
+                        >Add an inner container</span
+                      >: With the header selected,
+                      <span class="font-mono">Create First Child</span>. In
+                      Styles, add:
+                      <span class="font-mono"
+                        >max-w-6xl mx-auto px-6 py-4 flex items-center
+                        justify-between</span
+                      >.
+                    </li>
+                    <li>
+                      <span class="text-neutral-100">Logo text</span>: With the
+                      container selected,
+                      <span class="font-mono">Create First Child</span>, then
+                      <span class="font-mono">Element → Tag</span> to
+                      <span class="font-mono">a</span>. Replace text via
+                      <span class="font-mono"
+                        >Text &amp; Media → Single line</span
+                      >
+                      (e.g., “MySite”). Add classes:
+                      <span class="font-mono"
+                        >text-xl font-semibold text-white</span
+                      >.
+                    </li>
+                    <li>
+                      <span class="text-neutral-100">Navigation</span>: Select
+                      the container,
+                      <span class="font-mono">Create Next Sibling</span>, set
+                      tag to <span class="font-mono">nav</span>, then
+                      <span class="font-mono">Create First Child</span> to add a
+                      link (<span class="font-mono">a</span>). Replace its text
+                      (“Home”), set <span class="font-mono">href</span> via
+                      <span class="font-mono">Text &amp; Media → Link URL</span
+                      >, and add classes:
+                      <span class="font-mono"
+                        >px-3 py-1 rounded hover:bg-white/10 text-white/90</span
+                      >. Duplicate links with
+                      <span class="font-mono">Paste</span> actions and change
+                      their text (About, Contact).
+                    </li>
+                  </ol>
+                  <div class="text-xs text-neutral-400">
+                    Tip: If spacing feels tight, adjust container padding (<span
+                      class="font-mono"
+                      >px-6 py-4</span
+                    >) or link spacing (<span class="font-mono">gap-2</span> on
+                    a flex wrapper).
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Hero Section (Optional)
+                  </div>
+                  <div>Add a simple hero below the header:</div>
+                  <ol class="list-decimal pl-5 space-y-1">
+                    <li>
+                      Select the page root or the element below the header and
+                      choose <span class="font-mono">Create Next Sibling</span>.
+                      Add classes: <span class="font-mono">bg-slate-950</span>.
+                    </li>
+                    <li>
+                      <span class="font-mono">Create First Child</span> and add:
+                      <span class="font-mono"
+                        >max-w-6xl mx-auto px-6 py-16 text-white</span
+                      >.
+                    </li>
+                    <li>
+                      Add a heading (set tag to
+                      <span class="font-mono">h1</span>) and change text via
+                      <span class="font-mono">Single line</span>. Add classes:
+                      <span class="font-mono"
+                        >text-4xl md:text-5xl font-light</span
+                      >.
+                    </li>
+                    <li>
+                      Add a paragraph (set tag to
+                      <span class="font-mono">p</span>) and a button (set tag to
+                      <span class="font-mono">a</span> with
+                      <span class="font-mono">href</span>), style with
+                      <span class="font-mono"
+                        >px-5 py-2 rounded bg-emerald-600
+                        hover:bg-emerald-500</span
+                      >.
+                    </li>
+                  </ol>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Editing Content &amp; Media
+                  </div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      Text: use
+                      <span class="font-mono"
+                        >Text &amp; Media → Single/Multiline</span
+                      >.
+                    </li>
+                    <li>
+                      Images: select an <span class="font-mono">img</span> and
+                      use <span class="font-mono">Media Gallery</span> to swap
+                      visuals quickly.
+                    </li>
+                    <li>
+                      Backgrounds: for sections, use
+                      <span class="font-mono">Background Gallery</span> to apply
+                      imagery.
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Styling with Tailwind
+                  </div>
+                  <div>
+                    Compose utilities in the
+                    <span class="nf nf-fa-paint_brush"></span> Styles panel and
+                    Tailwind toolbar:
+                  </div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      Typography:
+                      <span class="font-mono"
+                        >text-xl md:text-2xl font-semibold tracking-wide</span
+                      >
+                    </li>
+                    <li>
+                      Layout:
+                      <span class="font-mono"
+                        >flex items-center justify-between gap-4</span
+                      >
+                    </li>
+                    <li>
+                      Spacing: <span class="font-mono">px-6 py-4 md:px-10</span>
+                    </li>
+                    <li>
+                      Colors:
+                      <span class="font-mono"
+                        >bg-slate-900 text-white/90 hover:bg-white/10</span
+                      >
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Restructure &amp; Reuse
+                  </div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      Wrap: add a parent wrapper around the selection to group
+                      content.
+                    </li>
+                    <li>
+                      Create: insert first/last child or next/prev siblings to
+                      build structure.
+                    </li>
+                    <li>
+                      Paste: duplicate elements and move them around your
+                      layout.
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Preview &amp; Iterate
+                  </div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      Toggle <span class="nf nf-fa-play"></span>
+                      <span class="font-mono">Preview</span> to view the page as
+                      users will see it (if not visible, see the visibility
+                      notes above).
+                    </li>
+                    <li>
+                      Return to edit mode to adjust text, classes, and
+                      structure.
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">Files &amp; Saving</div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      Use <span class="nf nf-fa-folder"></span>
+                      <span class="font-mono">Files</span> to create, rename,
+                      and organize items under
+                      <span class="font-mono">pages/</span>.
+                    </li>
+                    <li>
+                      Open any HTML under
+                      <span class="font-mono">pages/</span> to start editing it
+                      visually.
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="text-lg text-neutral-100">
+                    Advanced (Optional)
+                  </div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li>
+                      <span class="font-mono">Conditional</span> and
+                      <span class="font-mono">Map</span> (Toolbar → JavaScript)
+                      can show/hide or repeat blocks once you’re ready to add
+                      dynamic views.
+                    </li>
+                    <li>
+                      Event handlers can be attached from dialogs when you need
+                      simple interactivity.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div

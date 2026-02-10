@@ -56,6 +56,7 @@ export default class App {
 
     selectPanel: x => {
       this.state.panel = x;
+      this.state.docs = false;
       state.event.bus.emit('app:selectPanel:ready', { id: x });
     },
 

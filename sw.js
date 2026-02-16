@@ -33,6 +33,11 @@ self.addEventListener('fetch', ev => {
   }
   if (url.searchParams.get('isolate') != null) return;
   if (url.origin !== self.location.origin) {
+    // Never cache Netlify API responses; they are dynamic and polled for freshness
+    if (url.hostname === 'api.netlify.com') {
+      ev.respondWith(fetch(ev.request));
+      return;
+    }
     ev.respondWith((async () => {
       let cache = await caches.open('webfoundry-external');
       if (ev.request.method === 'GET') {

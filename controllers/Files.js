@@ -384,7 +384,7 @@ export default class Files {
         }
         try {
           let payload = await res.json();
-          uploadDeployId = payload?.id || payload?.deploy_id || uploadDeployId;
+          uploadDeployId = payload?.deploy_id || uploadDeployId;
           if (payload?.context) expectedContext = payload.context;
         } catch (_) {
           /* ignore parse failures; we'll fall back to listing */

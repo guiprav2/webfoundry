@@ -35,15 +35,24 @@ self.addEventListener('fetch', ev => {
   if (url.origin !== self.location.origin) {
     ev.respondWith((async () => {
       let cache = await caches.open('webfoundry-external');
-      let cached = await cache.match(url.href);
-      if (cached) return cached;
+      if (ev.request.method === 'GET') {
+        let cached = await cache.match(ev.request);
+        if (cached) return cached;
+      }
       try {
         let res = await fetch(ev.request);
-        if (res && (res.ok || res.type === 'cors' || res.type === 'opaque') && ev.request.method === 'GET') { cache.put(url.href, res.clone()) }
+        if (
+          ev.request.method === 'GET' &&
+          res && (res.ok || res.type === 'cors' || res.type === 'opaque')
+        ) {
+          await cache.put(ev.request, res.clone());
+        }
         return res;
       } catch (err) {
-        let fallback = await cache.match(url.href);
-        if (fallback) return fallback;
+        if (ev.request.method === 'GET') {
+          let fallback = await cache.match(ev.request);
+          if (fallback) return fallback;
+        }
         if (url.origin.includes('clarity.ms')) return new Response('');
         throw err;
       }

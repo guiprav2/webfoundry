@@ -61,6 +61,7 @@ export default class App {
     },
 
     brandCanvasMonitor: () => {
+      if (this.state.docs) return;
       try {
         let canvas = document.querySelector('#Canvas');
         let empty = [...canvas.children].slice(1).every(x => x.classList.contains('hidden'));

@@ -133,7 +133,7 @@
         </div>
 
         <div
-          class="bg-[#060a0fc0] backdrop-blur-[4px] z-10 hidden md:block"
+          class="backdrop-blur-[4px] z-10 hidden md:block bg-[#060a0fc0]"
           wf-if="state.designer.open &amp;&amp; !state.designer.current.preview &amp;&amp; state.settings.opt.toolbar &amp;&amp; !state.app.demo"
         >
           <div
@@ -3549,12 +3549,13 @@
             ></div>
           </div>
           <div
-            class="DocsPanel flex flex-col text-neutral-100 border-r border-black/50 select-none shrink-0 overflow-auto bg-[#091017c0] backdrop-blur-[4px] w-full"
+            class="DocsPanel flex flex-col text-neutral-100 border-r border-black/50 select-none shrink-0 overflow-auto backdrop-blur-[4px] bg-[#060a0fc0] flex-1 min-w-7xl"
             wf-if="state.app.docs"
             wf-class='{{replaces w-96: state.app.demo ? "w-64" : "w-96"}}'
           >
             <div class="px-4 py-3 border-b border-black/50 text-lg">
-              Documentation
+              Welcome to <span class="gfont-[Pacifico]">Webfoundry</span
+              ><span>!</span>
             </div>
             <div class="p-4 text-sm space-y-3 text-neutral-300">
               <div class="w-full space-y-8 text-neutral-300">
@@ -3565,7 +3566,6 @@
                   context-aware and may be hidden until certain conditions are
                   met.
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">Orientation</div>
                   <div>
@@ -3573,12 +3573,11 @@
                     reacts to state and explains when items are hidden and how
                     to reveal them.
                   </div>
-
                   <div
                     class="w-full rounded-2xl border border-white/10 bg-slate-950/60 p-4"
                   >
                     <div class="text-sm font-semibold text-neutral-200 mb-2">
-                      Icons Sidebar
+                      Icons Sidebar (left)
                     </div>
                     <div
                       class="flex items-center gap-1 p-2 border border-black/40 rounded bg-[#060a0fc0] backdrop-blur-[4px] *:shrink-0 w-full overflow-x-auto"
@@ -3592,11 +3591,13 @@
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-folder border border-black/50 bg-black/70 text-neutral-100"
                         title="Files"
                         value=""
+                        wf-class="{{(!state.projects.current || loadman.busy()) &amp;&amp; 'opacity-40 saturate-0'}}"
                       ></button>
                       <button
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-paint_brush border border-black/50 bg-black/70 text-neutral-100"
                         title="Styles"
                         value=""
+                        wf-class="{{(!state.designer.open || state.designer.current?.preview) &amp;&amp; 'opacity-40 saturate-0'}}"
                       ></button>
                       <button
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-seti-db border border-black/50 bg-black/70 text-neutral-100"
@@ -3607,35 +3608,44 @@
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-oct-command_palette border border-black/50 bg-black/70 text-neutral-100"
                         title="Shell"
                         value=""
+                        wf-class="{{(!/^connected|auth_fail$/.test(state.companion.client?.status || '')) &amp;&amp; !state.shell.list.length &amp;&amp; 'opacity-40 saturate-0'}}"
                       ></button>
                       <button
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-play border border-black/50 bg-black/70 text-neutral-100"
                         title="Preview"
                         value=""
+                        wf-class="{{!(state.designer.open &amp;&amp; String(state.files.current||'').startsWith('pages/') &amp;&amp; !state.designer.current?.preview) &amp;&amp; 'opacity-40 saturate-0'}}"
                       ></button>
-
                       <button
+                        class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-fa-pause border border-black/50 bg-black/70 text-neutral-100"
+                        title="Pause (exit Preview)"
+                        value=""
+                        wf-class="{{!state.designer.current?.preview &amp;&amp; 'opacity-40 saturate-0'}}"
+                      ></button
+                      ><button
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-oct-book border border-black/50 bg-black/70 text-emerald-300"
                         title="Documentation"
                         value=""
-                      ></button
-                      ><button
+                      ></button>
+                      <button
                         class="outline-none nf w-12 h-12 md:w-16 md:h-16 nf-md-dots_vertical_circle border border-black/50 bg-black/70 text-neutral-100"
                         title="Settings"
                         value=""
                       ></button>
                       <div
-                        class="flex items-center gap-2 ml-3 text-emerald-300"
+                        class="ml-3 flex gap-1.5 items-center text-emerald-300"
                       >
-                        <span class="nf nf-fa-arrow_left"></span
-                        ><span>You're here!</span>
+                        <div class="nf nf-fa-arrow_left"></div>
+                        <div>You're here!</div>
                       </div>
                     </div>
-                    <div class="mt-2 text-xs text-cyan-400">
-                      <span class="nf-fa-warning nf"></span> Visibility depends
-                      on context — notes below describe conditions.
+                    <div class="mt-2 text-xs text-neutral-400">
+                      Visibility depends on context — notes below describe
+                      conditions (mirroring the app's wf-if and wf-class logic).
+                      Icons are referenced with both the icon and the name to
+                      avoid ambiguity.
                     </div>
-                    <div class="mt-1 space-y-1 text-xs text-cyan-400">
+                    <div class="mt-1 space-y-1 text-xs text-neutral-400">
                       <div wf-if="!state.projects.current">
                         <span class="nf nf-fa-folder"></span> Files is hidden —
                         open/create a project via
@@ -3643,7 +3653,7 @@
                         Open/Create.
                       </div>
                       <div
-                        wf-if="state.projects.current &amp;&amp; loadman.ops['files.load']?.length"
+                        wf-if="state.projects.current &amp;&amp; loadman.busy()"
                       >
                         <span class="nf nf-fa-folder"></span> Files is loading…
                         please wait.
@@ -3652,7 +3662,8 @@
                         <span class="nf nf-fa-paint_brush"></span> Styles is
                         hidden — open a page under
                         <span class="font-mono">pages/</span> from
-                        <span class="nf nf-fa-folder"></span> Files.
+                        <span class="nf nf-fa-folder"></span> Files (the sidebar
+                        icon!)
                       </div>
                       <div
                         wf-if="state.designer.open &amp;&amp; state.designer.current?.preview"
@@ -3681,7 +3692,7 @@
                       <div wf-if="state.designer.current?.preview">
                         <span class="nf nf-fa-pause"></span> Pause is visible;
                         <span class="nf nf-fa-play"></span> Preview is hidden —
-                        click Pause to return to editing.
+                        click Pause to return.
                       </div>
                       <div
                         wf-if="!/^connected|auth_fail$/.test(state.companion.client?.status || '') &amp;&amp; !state.shell.list.length"
@@ -3692,7 +3703,6 @@
                       </div>
                     </div>
                   </div>
-
                   <div
                     class="w-full rounded-2xl border border-white/10 bg-slate-950/60 p-4"
                   >
@@ -3739,11 +3749,7 @@
                       Replace text, wrap/un-wrap, create siblings/children, and
                       swap media/backgrounds.
                     </div>
-                    <div class="mt-2 text-xs text-cyan-400">
-                      <span class="nf-fa-warning nf"></span> Visibility depends
-                      on context — notes below describe conditions.
-                    </div>
-                    <div class="mt-1 space-y-1 text-xs text-cyan-400">
+                    <div class="mt-1 space-y-1 text-xs text-neutral-400">
                       <div
                         wf-if="!state.designer.open || !(String(state.files.current||'').startsWith('pages/'))"
                       >
@@ -3769,14 +3775,13 @@
                     </div>
                   </div>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">Your First Page</div>
                   <div>
                     When you open a new project, the default page is
                     intentionally blank. Here is how to begin:
                   </div>
-                  <ol class="list-decimal pl-5 space-y-1">
+                  <ol class="list-decimal pl-5 space-y-3">
                     <li>
                       Click <span class="nf nf-fa-folder"></span>
                       <span class="font-mono">Files</span> and create/open a
@@ -3789,14 +3794,95 @@
                       <span class="font-mono">&lt;body&gt;</span>) is selected.
                     </li>
                     <li>
-                      Open <span class="nf nf-fa-angle_down"></span>
-                      <span class="font-mono">Manipulation</span> →
-                      <span class="font-mono">Create First Child</span> to add
-                      your first element.
+                      Open an inline copy of
+                      <span class="font-mono">Manipulation</span> and choose
+                      <span class="font-mono">Create First Child</span>:
+                      <div class="mt-2 relative inline-block group">
+                        <button
+                          class="px-3 outline-none focus:ring ring-neutral-600 text-white rounded flex items-center justify-between py-1 w-36"
+                          value=""
+                        >
+                          <span class="text-sm">Manipulation</span
+                          ><span
+                            class="nf nf-fa-angle_down relative top-0.5"
+                          ></span>
+                        </button>
+                        <div
+                          class="absolute hidden group-hover:block pt-2 z-10"
+                        >
+                          <div
+                            class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 w-56 *:hover:bg-[#091017]"
+                            wf-onclick="document.activeElement.blur()"
+                          >
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Select Parent</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Select Next Sibling</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Select Prev Sibling</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Select First Child</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none ring-1 ring-emerald-400/70 text-emerald-300 bg-emerald-300/10"
+                              value=""
+                            >
+                              <div>Create First Child</div>
+                              <span class="text-emerald-300 text-xs"
+                                >← this one!</span
+                              >
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Create Last Child</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Create Next Sibling</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Create Prev Sibling</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Wrap</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Unwrap</div>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </li>
                   </ol>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Build a Header From Scratch
@@ -3806,16 +3892,65 @@
                     toolbar and
                     <span class="nf nf-fa-paint_brush"></span> Styles panel.
                   </div>
-                  <ol class="list-decimal pl-5 space-y-2">
+                  <ol class="list-decimal pl-5 space-y-3">
                     <li>
                       <span class="text-neutral-100"
                         >Create a header wrapper</span
                       >: With the page root selected, choose
-                      <span class="font-mono">Create First Child</span> in the
-                      toolbar. Then in the
-                      <span class="font-mono">&lt;div&gt;</span> dropdown,
-                      change the tag to <span class="font-mono">header</span>.
-                      Add classes in <span class="font-mono">Styles</span>:
+                      <span class="font-mono">Create First Child</span>. Then
+                      adjust <span class="font-mono">Element</span> and the
+                      current tag:
+                      <div class="mt-2 flex items-start gap-3">
+                        <div class="relative inline-block group">
+                          <button
+                            class="px-3 outline-none focus:ring ring-neutral-600 text-white rounded flex items-center justify-between py-1 w-32"
+                            value=""
+                          >
+                            <span class="text-sm truncate"
+                              >{{state.designer.tagLabel}}</span
+                            ><span
+                              class="nf nf-fa-angle_down relative top-0.5"
+                            ></span>
+                          </button>
+                          <div
+                            class="absolute hidden group-hover:block pt-2 z-10"
+                          >
+                            <div
+                              class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 w-48 *:hover:bg-[#091017]"
+                              wf-onclick="document.activeElement.blur()"
+                            >
+                              <button
+                                class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                                value=""
+                              >
+                                <div>&lt;div&gt;</div>
+                              </button>
+                              <button
+                                class="w-full text-left px-3 py-2 flex justify-between items-center outline-none ring-1 ring-emerald-400/70 text-emerald-300 bg-emerald-300/10"
+                                value=""
+                              >
+                                <div>&lt;header&gt;</div>
+                                <span class="text-emerald-300 text-xs"
+                                  >← this one!</span
+                                >
+                              </button>
+                              <button
+                                class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                                value=""
+                              >
+                                <div>&lt;nav&gt;</div>
+                              </button>
+                              <button
+                                class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                                value=""
+                              >
+                                <div>&lt;a&gt;</div>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      Then add classes in <span class="font-mono">Styles</span>:
                       <span class="font-mono">bg-slate-900</span>.
                     </li>
                     <li>
@@ -3833,12 +3968,75 @@
                       <span class="text-neutral-100">Logo text</span>: With the
                       container selected,
                       <span class="font-mono">Create First Child</span>, then
-                      <span class="font-mono">Element → Tag</span> to
-                      <span class="font-mono">a</span>. Replace text via
-                      <span class="font-mono"
-                        >Text &amp; Media → Single line</span
-                      >
-                      (e.g., “MySite”). Add classes:
+                      change tag to <span class="font-mono">a</span>. Replace
+                      text via an inline copy of
+                      <span class="font-mono">Text &amp; Media</span>:
+                      <div class="mt-2 relative inline-block group">
+                        <button
+                          class="px-3 outline-none focus:ring ring-neutral-600 text-white rounded flex items-center justify-between py-1 w-40"
+                          value=""
+                        >
+                          <span class="text-sm">Text &amp; Media</span
+                          ><span
+                            class="nf nf-fa-angle_down relative top-0.5"
+                          ></span>
+                        </button>
+                        <div
+                          class="absolute hidden group-hover:block pt-2 z-10"
+                        >
+                          <div
+                            class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 w-56 *:hover:bg-[#091017]"
+                            wf-onclick="document.activeElement.blur()"
+                          >
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none ring-1 ring-emerald-400/70 text-emerald-300 bg-emerald-300/10"
+                              value=""
+                            >
+                              <div>Single line</div>
+                              <span class="text-emerald-300 text-xs"
+                                >← this one!</span
+                              >
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Multiline</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Link URL</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Media URL</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Media Gallery</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Background URL</div>
+                            </button>
+                            <button
+                              class="w-full text-left px-3 py-2 flex justify-between items-center outline-none opacity-40"
+                              value=""
+                            >
+                              <div>Background Gallery</div>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      Add classes:
                       <span class="font-mono"
                         >text-xl font-semibold text-white</span
                       >.
@@ -3851,13 +4049,12 @@
                       <span class="font-mono">Create First Child</span> to add a
                       link (<span class="font-mono">a</span>). Replace its text
                       (“Home”), set <span class="font-mono">href</span> via
-                      <span class="font-mono">Text &amp; Media → Link URL</span
-                      >, and add classes:
+                      <span class="font-mono">Text &amp; Media</span> →
+                      <span class="font-mono">Link URL</span>, and add classes:
                       <span class="font-mono"
                         >px-3 py-1 rounded hover:bg-white/10 text-white/90</span
-                      >. Duplicate links with
-                      <span class="font-mono">Paste</span> actions and change
-                      their text (About, Contact).
+                      >. Duplicate links with Paste and change text (About,
+                      Contact).
                     </li>
                   </ol>
                   <div class="text-xs text-neutral-400">
@@ -3868,7 +4065,6 @@
                     a flex wrapper).
                   </div>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Hero Section (Optional)
@@ -3906,7 +4102,6 @@
                     </li>
                   </ol>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Editing Content &amp; Media
@@ -3930,7 +4125,6 @@
                     </li>
                   </ul>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Styling with Tailwind
@@ -3964,7 +4158,6 @@
                     </li>
                   </ul>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Restructure &amp; Reuse
@@ -3984,7 +4177,6 @@
                     </li>
                   </ul>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Preview &amp; Iterate
@@ -4002,7 +4194,6 @@
                     </li>
                   </ul>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">Files &amp; Saving</div>
                   <ul class="list-disc pl-5 space-y-1">
@@ -4019,7 +4210,6 @@
                     </li>
                   </ul>
                 </div>
-
                 <div class="space-y-2">
                   <div class="text-lg text-neutral-100">
                     Advanced (Optional)

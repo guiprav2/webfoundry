@@ -21,7 +21,14 @@ self.addEventListener('fetch', ev => {
       let cache = await caches.open('webfoundry-pages');
       try {
         let res = await fetch(ev.request);
-        ev.request.method === 'GET' && cache.put(url.href, res.clone());
+        if (
+          ev.request.method === 'GET' &&
+          res && res.type !== 'opaqueredirect' &&
+          (res.ok || res.type === 'cors' || res.type === 'opaque') &&
+          res.headers.get('Vary') !== '*'
+        ) {
+          try { await cache.put(url.href, res.clone()); } catch (_) {}
+        }
         return res;
       } catch (err) {
         let cached = await cache.match(url.href);
@@ -74,7 +81,13 @@ self.addEventListener('fetch', ev => {
       const cache = await caches.open('webfoundry-internal');
       try {
         const res = await fetch(ev.request);
-        cache.put(url.href, res.clone());
+        if (
+          res && res.type !== 'opaqueredirect' &&
+          (res.ok || res.type === 'cors' || res.type === 'opaque') &&
+          res.headers.get('Vary') !== '*'
+        ) {
+          try { await cache.put(url.href, res.clone()); } catch (_) {}
+        }
         return res;
       } catch (err) {
         const cached = await cache.match(url.href);

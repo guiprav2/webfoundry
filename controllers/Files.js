@@ -125,13 +125,13 @@ export default class Files {
           if (storage !== 'local') return;
           bus.emit(event.split(':').slice(1).join(':'), { path });
         });
-        bus.on(`companion:files:${x}`, ({ event, path }) => {
+        bus.on(`companion:files:${x}`, ({ type, path }) => {
           let name = path.split('/')[0];
           let project = state.projects.list.find(x => x.startsWith(`${name}:`));
           if (!project) return;
           let storage = rprojects.storage(project);
           if (storage !== 'cfs') return;
-          bus.emit(event.split(':').slice(1).join(':'), { path });
+          bus.emit(type, { path });
         });
         bus.on(`files:${x}`, async ({ path }) => {
           if (!state.projects.current || !path.startsWith(`${state.projects.current.split(':')[0]}/`)) return;

@@ -21,7 +21,7 @@
     wf-class="{{replaces bg-[#060a0f]: !state.settings.opt?.wallpaper &amp;&amp; 'bg-[#060a0f]'}}"
   >
     <div
-      class="App flex relative w-screen overflow-hidden h-[100dvh] bg-[#060a0f]"
+      class="App flex relative w-screen overflow-hidden h-[100dvh] bg-[#060a0f] pb-[env(safe-area-inset-bottom)]"
       wf-class="{{replaces bg-[#060a0f]: !state.settings.opt?.wallpaper &amp;&amp; 'bg-[#060a0f]'}}"
       wf-onattach="post('app.init')"
     >
@@ -81,6 +81,13 @@
           wf-class="{{state.app.panel === 'db' &amp;&amp; 'bg-black/70'}}"
           wf-onclick="post('app.selectPanel', 'db')"
           value=""
+        ></button>
+        <button
+          class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 nf-md-robot IconsSidebar-agentBtn"
+          wf-onclick="post('app.selectPanel', 'agent')"
+          value=""
+          wf-class="{{state.app.panel === 'agent' &amp;&amp; 'bg-black/70'}}"
+          title="Agent"
         ></button>
         <button
           class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 nf-oct-command_palette IconsSidebar-shellBtn"
@@ -3069,6 +3076,45 @@
                   value=""
                 />
               </div>
+            </div>
+          </div>
+          <div
+            class="AgentPanel flex flex-col text-neutral-100 border-r border-black/50 shrink-0 bg-[#091017c0] backdrop-blur-[4px] w-full md:w-96"
+            wf-if="state.app.panel === 'agent'"
+            wf-class="{{replaces w-96: state.app.demo ? 'w-64' : 'w-96'}}"
+          >
+            <div
+              class="AgentPanel-log flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-3"
+            >
+              <div
+                class=""
+                wf-class="{{x.role === 'user' ? 'text-right text-sky-200' : 'text-left text-neutral-100'}}"
+                wf-map="x of state.agent.entries"
+              >
+                <div
+                  class="text-xs uppercase tracking-wide text-neutral-400 mb-1"
+                >
+                  {{x.role === 'user' ? 'User' : 'Assistant'}}
+                </div>
+                <div>{{x.text}}</div>
+              </div>
+            </div>
+            <div class="shrink-0 border-t border-black/50 flex flex-col">
+              <textarea
+                class="h-40 w-full bg-black/40 p-2 outline-none resize-none"
+                wf-value="state.agent.draft"
+                wf-onkeydown="(event.ctrlKey || event.metaKey) &amp;&amp; event.key === 'Enter' &amp;&amp; (event.preventDefault(), post('agent.send'))"
+                placeholder="Ask the agent something"
+                value=""
+              ></textarea>
+              <button
+                class="outline-none border-b border-black/50 transition-all h-12 text-xl transition-colors hover:bg-[#008ad9] shrink-0 bg-[#0071b2] disabled:opacity-50 DbPanel-createBtn"
+                wf-onclick="post('agent.send')"
+                wf-disabled="state.agent.busy || !(state.agent.draft || '').trim()"
+                value=""
+              >
+                Send
+              </button>
             </div>
           </div>
 

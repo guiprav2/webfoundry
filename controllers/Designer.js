@@ -50,6 +50,7 @@ export default class Designer {
       else if (/^([a-z0-9]+--)?webfoundry\d+\.webfoundry\.app$/i.test(host)) root = parts.slice(-2).join('.');
       else if (/\.webfoundry\.app$/i.test(host)) root = parts.slice(-2).join('.');
       else root = parts.slice(-2).join('.');
+      if (location.port) root += `:${location.port}`;
       return `${location.protocol}//${sub}.${root}${fullpath}?isolate=${location.origin}`;
     },
 

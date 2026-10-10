@@ -17,7 +17,7 @@
   </head>
   <body class="overflow-hidden h-screen" style="display: none">
     <div
-      class="App flex relative w-screen bg-[#060a0f] overflow-hidden h-[100dvh]"
+      class="App flex relative w-screen bg-[#060a0f] overflow-hidden h-[100dvh] pb-[env(safe-area-inset-bottom)]"
       wf-class="{{replaces bg-[#060a0f]: !state.settings.opt?.wallpaper &amp;&amp; 'bg-[#060a0f]'}}"
       wf-onattach="post('app.init')"
     >

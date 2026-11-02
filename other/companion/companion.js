@@ -213,7 +213,10 @@ function buildGlobIgnoresFromGitignore(root) {
 }
 
 let isIgnored = buildGitignoreMatcher(workspace);
-let watcher = chokidar.watch(workspace, { ignoreInitial: true, ignored: p => /(^|[\\/])node_modules([\\/]|$)/.test(p) || isIgnored(p) });
+let watcher = chokidar.watch(workspace, {
+  ignoreInitial: true,
+  ignored: p => /(^|[\\/])node_modules([\\/]|$)/.test(p) || isIgnored(p)
+});
 ['add', 'change', 'unlink'].forEach(event => {
   watcher.on(event, path => {
     // Extra guard: never broadcast events for ignored paths

@@ -9,6 +9,17 @@ async function getTab(tabId) {
   let res = await cache.match(tabId);
   return res && await res.text();
 }
+function isCacheableResponse(res) {
+  return (
+    res &&
+    res.type !== 'opaqueredirect' &&
+    (res.ok || res.type === 'opaque') &&
+    res.headers.get('Vary') !== '*'
+  );
+}
+function isUsableCachedResponse(res) {
+  return res && (res.ok || res.type === 'opaque');
+}
 self.addEventListener('message', async ev => {
   let { data } = ev;
   if (data.type !== 'webfoundry-register-tab') return;
@@ -21,18 +32,13 @@ self.addEventListener('fetch', ev => {
       let cache = await caches.open('webfoundry-pages');
       try {
         let res = await fetch(ev.request);
-        if (
-          ev.request.method === 'GET' &&
-          res && res.type !== 'opaqueredirect' &&
-          (res.ok || res.type === 'cors' || res.type === 'opaque') &&
-          res.headers.get('Vary') !== '*'
-        ) {
+        if (ev.request.method === 'GET' && isCacheableResponse(res)) {
           try { await cache.put(url.href, res.clone()); } catch (_) {}
         }
         return res;
       } catch (err) {
         let cached = await cache.match(url.href);
-        if (cached) return cached;
+        if (isUsableCachedResponse(cached)) return cached;
         throw err;
       }
     })());
@@ -49,21 +55,18 @@ self.addEventListener('fetch', ev => {
       let cache = await caches.open('webfoundry-external');
       if (ev.request.method === 'GET') {
         let cached = await cache.match(ev.request);
-        if (cached) return cached;
+        if (isUsableCachedResponse(cached)) return cached;
       }
       try {
         let res = await fetch(ev.request);
-        if (
-          ev.request.method === 'GET' &&
-          res && (res.ok || res.type === 'cors' || res.type === 'opaque')
-        ) {
+        if (ev.request.method === 'GET' && isCacheableResponse(res)) {
           await cache.put(ev.request, res.clone());
         }
         return res;
       } catch (err) {
         if (ev.request.method === 'GET') {
           let fallback = await cache.match(ev.request);
-          if (fallback) return fallback;
+          if (isUsableCachedResponse(fallback)) return fallback;
         }
         if (url.origin.includes('clarity.ms')) return new Response('');
         throw err;
@@ -81,17 +84,13 @@ self.addEventListener('fetch', ev => {
       const cache = await caches.open('webfoundry-internal');
       try {
         const res = await fetch(ev.request);
-        if (
-          res && res.type !== 'opaqueredirect' &&
-          (res.ok || res.type === 'cors' || res.type === 'opaque') &&
-          res.headers.get('Vary') !== '*'
-        ) {
+        if (isCacheableResponse(res)) {
           try { await cache.put(url.href, res.clone()); } catch (_) {}
         }
         return res;
       } catch (err) {
         const cached = await cache.match(url.href);
-        if (cached) return cached;
+        if (isUsableCachedResponse(cached)) return cached;
         throw err;
       }
     })());

@@ -24,7 +24,7 @@ if (isServer) {
   let expressImport = await import('express');
   expressModule = expressImport.default || expressImport;
 } else {
-  let nedbImport = await import('https://esm.sh/@seald-io/nedb');
+  let nedbImport = await import('https://esm.run/@seald-io/nedb');
   Datastore = nedbImport.default;
 }
 

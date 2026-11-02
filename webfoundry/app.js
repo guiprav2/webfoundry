@@ -1,7 +1,7 @@
-import anime from 'https://esm.sh/animejs@3.2.2';
+import anime from 'https://esm.run/animejs@3.2.2';
 import d from './dominant.js';
-import { camelCase } from 'https://esm.sh/case-anything';
-import { marked } from 'https://esm.sh/marked@13.0.1';
+import { camelCase } from 'https://esm.run/case-anything';
+import { marked } from 'https://esm.run/marked@13.0.1';
 
 window.anime = anime;
 window.d = d;
@@ -337,6 +337,25 @@ function wfeval(n, expr, ...args) {
 
 window.wfeval = wfeval;
 
+function rewriteCssUrls(value) {
+  return value.replace(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/g, (full, quote, url) => {
+    if (!url.startsWith('../')) return full;
+    return `url("${url.slice(3)}")`;
+  });
+}
+
+function stripCssDotDot(style) {
+  let props = [];
+  for (let i = 0; i < style.length; i++) props.push(style.item(i));
+  for (let prop of props) {
+    let value = style.getPropertyValue(prop);
+    if (!value.includes('url(') || !value.includes('../')) continue;
+    let next = rewriteCssUrls(value);
+    if (next === value) continue;
+    style.setProperty(prop, next, style.getPropertyPriority(prop));
+  }
+}
+
 function compile(root) {
   root.style.display = '';
   for (let x of [root, ...root.querySelectorAll('*')]) {
@@ -491,13 +510,7 @@ function compile(root) {
       x.src = x.getAttribute('src').slice(3);
     }
 
-    if (x.style.backgroundImage?.startsWith?.('url(')) {
-      let url = JSON.parse(x.style.backgroundImage.slice(4, -1));
-      if (!url.startsWith('../')) {
-        continue;
-      }
-      x.style.backgroundImage = `url("${url.slice(3)}")`;
-    }
+    if (x.style?.length) stripCssDotDot(x.style);
 
     if (x.getAttribute('wf-href')) {
       let expr = x.getAttribute('wf-href');

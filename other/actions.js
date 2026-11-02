@@ -1,12 +1,12 @@
 import codex from './codex.js';
 import complete from './complete.js';
-import confetti from 'https://esm.sh/canvas-confetti';
+import confetti from 'https://esm.run/canvas-confetti';
 import rfiles from '../repos/rfiles.js';
 import { applyPatch } from './diff.js';
 import { getOpenAIKey, complete as openaiComplete } from './openai.js';
 import { loadman, joinPath } from '../other/util.js';
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
-import { minimatch } from 'https://esm.sh/minimatch';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
+import { minimatch } from 'https://esm.run/minimatch';
 
 let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone'];
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];

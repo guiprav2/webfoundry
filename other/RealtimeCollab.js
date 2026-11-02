@@ -1,5 +1,5 @@
-import EventEmitter from 'https://esm.sh/eventemitter2';
-import { joinRoom } from 'https://esm.sh/trystero?target=es2022&bundle';
+import EventEmitter from 'https://esm.run/eventemitter2';
+import { joinRoom } from 'https://esm.run/trystero';
 
 const COLORS = [
   'red-600', 'red-800', 'orange-600', 'orange-800', 'amber-600', 'amber-800',

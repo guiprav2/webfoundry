@@ -1,6 +1,6 @@
 import actions from '../other/actions.js';
-import autoassist from 'https://esm.sh/@camilaprav/kittygpt@0.0.65/autoassist.js';
-import morphdom from 'https://esm.sh/morphdom';
+import autoassist from 'https://esm.run/@camilaprav/kittygpt@0.0.65/autoassist.js';
+import morphdom from 'https://esm.run/morphdom';
 import { arrayify, debounce, resolve } from '../other/util.js';
 import { loadman } from '../other/util.js';
 

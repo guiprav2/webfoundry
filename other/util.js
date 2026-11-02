@@ -1,4 +1,4 @@
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 
 window.tap = x => (console.log(x), x);
 

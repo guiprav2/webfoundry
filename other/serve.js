@@ -71,7 +71,7 @@ function createServer({ root, host, port, certPath, keyPath }) {
 
   let cert = readOptional(certPath);
   let key = readOptional(keyPath);
-  if (cert && key) {
+  if (false && cert && key) {
     https.createServer({ cert, key }, handler).listen(port, host, () => {
       console.log(`Serving ${root} on https://${host}:${port}`);
     });

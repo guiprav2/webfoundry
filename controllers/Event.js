@@ -1,4 +1,4 @@
-import EventEmitter from 'https://esm.sh/eventemitter2';
+import EventEmitter from 'https://esm.run/eventemitter2';
 
 export default class Event {
   state = {

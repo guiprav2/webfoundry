@@ -1,0 +1,630 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>docs.html</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <script>
+      window.rootPrefix = /^\/(files|preview)\//.test(location.pathname)
+        ? location.pathname.split('/').slice(0, 4).join('/')
+        : '/';
+    </script>
+    <script type="module" src="../webfoundry/ifdesigner.js"></script>
+    <script src="../webfoundry/head.js"></script>
+  </head>
+  <body
+    class="flex flex-col [&amp;&gt;div:first-child]:flex-1 min-h-screen"
+    style="display: none"
+  >
+    <div
+      class="App flex relative w-screen overflow-hidden h-[100dvh] bg-[#060a0f]"
+    >
+      <!-- Sidebar -->
+      <aside
+        class="DocsSidebar flex flex-col shrink-0 w-72 md:w-80 border-r border-black/50 select-none text-neutral-100 overflow-auto bg-[#060a0fc0] backdrop-blur-[4px]"
+      >
+        <div
+          class="px-4 py-4 border-b border-black/50 gfont-[Pacifico] text-xl"
+        >
+          Webfoundry Docs
+        </div>
+        <nav class="px-2 py-3 text-sm">
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#quickstart">Quickstart: Create, Style, Publish</a>
+          </div>
+          <div
+            class="mt-3 px-3 text-xs uppercase tracking-wider text-neutral-400"
+          >
+            Basics
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#building-pages">Building Pages</a>
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#files-editing">Files &amp; Editing</a>
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#interactivity">Interactivity</a>
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#project-settings">Project Settings</a>
+          </div>
+          <div
+            class="mt-3 px-3 text-xs uppercase tracking-wider text-neutral-400"
+          >
+            Ship &amp; Share
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#deploy">Netlify Deploys</a>
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#import-export">Git &amp; ZIP Import/Export</a>
+          </div>
+          <div
+            class="mt-3 px-3 text-xs uppercase tracking-wider text-neutral-400"
+          >
+            Collaboration
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#collaboration">Realtime Collaboration</a>
+          </div>
+          <div
+            class="mt-3 px-3 text-xs uppercase tracking-wider text-neutral-400"
+          >
+            Advanced
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#companion">Companion, Shell, Companion FS</a>
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#database">Database Collections</a>
+          </div>
+          <div
+            class="mt-3 px-3 text-xs uppercase tracking-wider text-neutral-400"
+          >
+            Reference
+          </div>
+          <div class="px-3 py-1.5 rounded hover:bg-black/50">
+            <a href="#reference">Tips &amp; Shortcuts</a>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Content -->
+      <div
+        class="DocsContent flex-1 min-w-0 basis-0 overflow-auto text-neutral-100"
+      >
+        <header
+          class="sticky top-0 z-10 bg-[#060a0fc0] backdrop-blur-[4px] border-b border-black/50"
+        >
+          <div class="px-6 py-3 text-lg">Documentation</div>
+        </header>
+        <main class="px-6 md:px-10 py-8 space-y-16">
+          <!-- Quickstart -->
+          <section id="quickstart" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">
+              Quickstart: Create, Style, Publish
+            </h2>
+            <p class="text-neutral-300 mb-4">
+              In ~10 minutes you’ll create your first project, add a page, style
+              a section’s background, and see where to deploy it.
+            </p>
+            <div class="border-l-4 border-blue-400 pl-3 text-neutral-300 mb-4">
+              Prereqs: use a desktop‑width viewport to see the top toolbar
+              (Tailwind &amp; Manipulation).
+            </div>
+            <ol class="list-decimal pl-6 space-y-3 text-neutral-300">
+              <li>
+                <div class="font-medium">Create a project</div>
+                <div>
+                  Open <span class="font-medium">Projects</span> (left rail) →
+                  <span class="font-medium">Create</span>. Give it a friendly
+                  name in <span class="font-medium">Settings &amp; More</span> →
+                  Project Title.
+                </div>
+              </li>
+              <li>
+                <div class="font-medium">
+                  See
+                  <code class="px-1 bg-black/40 rounded">pages/index.html</code>
+                  load
+                </div>
+              </li>
+              <li>
+                <div class="font-medium">
+                  Delete the placeholder and create your first div
+                </div>
+                <div>
+                  Select the placeholder element that says
+                  <span class="italic">"Page intentionally left blank."</span>
+                </div>
+                <div>
+                  Click placeholder element then: Top toolbar →
+                  <span class="font-medium">Manipulation</span> →
+                  <span class="font-medium">Delete</span> (cross icon).
+                </div>
+              </li>
+              <li>
+                <div class="font-medium">Insert a section to style</div>
+                <div>
+                  Top toolbar → <span class="font-medium">Manipulation</span> →
+                  <span class="font-medium">Create</span> →
+                  <span class="font-medium">Inside</span>. Select
+                  <code class="px-1 bg-black/40 rounded">&lt;section&gt;</code>
+                  from the tag dropdown.
+                </div>
+              </li>
+              <li>
+                <div class="font-medium">Give it a background color</div>
+                <div>
+                  Switch to the
+                  <span class="font-medium">Tailwind</span> toolbar →
+                  <span class="font-medium">Back Color</span> (pick a hue) →
+                  <span class="font-medium">Back Shade</span> (e.g., 500).
+                  You’ll see background change immediately.
+                </div>
+                <div class="mt-2 border-l-4 border-blue-400 pl-3">
+                  Alternate: open the
+                  <span class="font-medium">Styles</span> panel (left raild) →
+                  “add class” → type
+                  <code class="px-1 bg-black/40 rounded">bg-blue-500</code>.
+                </div>
+              </li>
+              <li>
+                <div class="font-medium">Preview &amp; publish (later)</div>
+                <div>
+                  For now, note that the Deploy flow lives under
+                  <span class="font-medium"
+                    >Settings &amp; More → Deploy to Netlify</span
+                  >. We’ll cover it in detail below.
+                </div>
+              </li>
+            </ol>
+            <div class="mt-4 text-neutral-300">
+              <div class="font-medium">What you learned</div>
+              <ul class="list-disc pl-6 space-y-1">
+                <li>Projects vs Files vs Designer.</li>
+                <li>Two ways to style: Tailwind menus or Styles panel.</li>
+                <li>Where the Deploy flow lives.</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Building Pages -->
+          <section id="building-pages" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Building Pages</h2>
+            <p class="text-neutral-300 mb-4">
+              Select, navigate, and restructure quickly; then edit text and
+              media.
+            </p>
+            <div class="grid gap-4">
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">1) Navigate selection</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Manipulation → <span class="font-medium">Cursor</span>:
+                    Parent, Next, Previous, First/Last Child.
+                  </li>
+                  <li>
+                    Optional Vim/arrow keys:
+                    <code class="px-1 bg-black/40 rounded"
+                      >h (left arrow key)</code
+                    >
+                    parent,
+                    <code class="px-1 bg-black/40 rounded"
+                      >j (down arrow key)</code
+                    >
+                    next,
+                    <code class="px-1 bg-black/40 rounded"
+                      >k (up arrow key)</code
+                    >
+                    previous,
+                    <code class="px-1 bg-black/40 rounded"
+                      >l (right arrow key)</code
+                    >/<code class="px-1 bg-black/40 rounded">L</code>
+                    child/last child.
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">2) Restructure fast</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Manipulation → <span class="font-medium">Create</span>:
+                    Inside, Inside (last), After, Before.
+                  </li>
+                  <li>
+                    <span class="font-medium">Wrap</span> gathers selection into
+                    a new parent;
+                    <span class="font-medium">Unwrap</span> removes a wrapper.
+                  </li>
+                  <li>
+                    Use Delete/Copy buttons in the toolbar for quick cleanup and
+                    duplication.
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">3) Edit content</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Text &amp; Media →
+                    <span class="font-medium">Single line</span> /
+                    <span class="font-medium">Multiline</span> to replace text
+                    nodes.
+                  </li>
+                  <li>
+                    Links: <span class="font-medium">Link URL</span> on anchors
+                    (<code class="px-1 bg-black/40 rounded">&lt;a&gt;</code>).
+                  </li>
+                  <li>
+                    Images &amp; backgrounds:
+                    <span class="font-medium">Media URL</span>,
+                    <span class="font-medium">Media Gallery</span>, and
+                    <span class="font-medium">Background URL/Gallery</span>.
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">4) Style with Tailwind</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Font Family (includes Google Fonts search), Text
+                    Size/Style/Tracking.
+                  </li>
+                  <li>Text Color + Shade; Back Color + Shade.</li>
+                  <li>
+                    Or add classes directly via the
+                    <span class="font-medium">Styles</span> panel (supports
+                    inline editing/renaming).
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- Files & Editing -->
+          <section id="files-editing" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Files &amp; Editing</h2>
+            <div class="space-y-3 text-neutral-300">
+              <p>
+                <span class="font-medium">Create/rename/delete:</span> use the
+                Files panel controls. Protected items are hidden from
+                rename/delete.
+              </p>
+              <p>
+                <span class="font-medium">Drag &amp; drop:</span> rearrange
+                files/folders; the UI shows valid drop targets as you drag.
+              </p>
+              <p>
+                <span class="font-medium">Media preview:</span> selecting
+                images/videos/audio opens a live preview pane.
+              </p>
+              <p>
+                <span class="font-medium">Code editor:</span> non‑HTML text
+                files open in a code area. Use it for scripts, JSON, etc.
+              </p>
+            </div>
+          </section>
+
+          <!-- Interactivity -->
+          <section id="interactivity" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Interactivity</h2>
+            <p class="text-neutral-300 mb-3">
+              You can add logic via declarative attributes—no manual DOM
+              plumbing.
+            </p>
+            <div class="bg-black/40 rounded p-4 mb-3">
+              <div class="font-semibold mb-1">
+                A. Conditional rendering (wf‑if)
+              </div>
+              <ol class="list-decimal pl-6 space-y-1 text-neutral-300">
+                <li>Select an element you want to show/hide.</li>
+                <li>
+                  Toolbar → JavaScript →
+                  <span class="font-medium">Conditional</span> and set an
+                  expression (e.g.,
+                  <code class="px-1 bg-black/40 rounded">state.app.ready</code
+                  >).
+                </li>
+              </ol>
+              <div class="mt-2 text-neutral-400 text-sm">
+                Effect: the element toggles in/out when the expression
+                truthiness changes.
+              </div>
+            </div>
+            <div class="bg-black/40 rounded p-4 mb-3">
+              <div class="font-semibold mb-1">B. Lists (wf‑map)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-neutral-300">
+                <li>Insert a container where items should render.</li>
+                <li>
+                  Toolbar → JavaScript →
+                  <span class="font-medium">Map</span> and set
+                  <code class="px-1 bg-black/40 rounded"
+                    >item of state.todos</code
+                  >.
+                </li>
+                <li>
+                  Inside it, use mustache to show fields:
+                  <code class="px-1 bg-black/40 rounded">{{item.text}}</code>.
+                </li>
+              </ol>
+            </div>
+            <div class="bg-black/40 rounded p-4 mb-3">
+              <div class="font-semibold mb-1">C. Events (wf‑on*)</div>
+              <ol class="list-decimal pl-6 space-y-1 text-neutral-300">
+                <li>Select a button or input.</li>
+                <li>
+                  Toolbar → JavaScript →
+                  <span class="font-medium">Event Handlers</span>, e.g., set
+                  <code class="px-1 bg-black/40 rounded">click</code> to
+                  <code class="px-1 bg-black/40 rounded">post('app.save')</code
+                  >.
+                </li>
+              </ol>
+              <div
+                class="mt-2 border-l-4 border-blue-400 pl-3 text-sm text-neutral-300"
+              >
+                Tip: Handler values are expressions (not statements). For
+                complex flows, call actions (post('ctrl.action')).
+              </div>
+            </div>
+            <div class="bg-black/40 rounded p-4">
+              <div class="font-semibold mb-1">D. Forms</div>
+              <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                <li>
+                  <span class="font-medium">Placeholder</span> (Element →
+                  Placeholder) for inputs/textarea.
+                </li>
+                <li>
+                  <span class="font-medium">Set Input Value</span> to bind
+                  values (two‑way with wf‑value).
+                </li>
+                <li>
+                  <span class="font-medium">Form Method</span> (GET/POST) when a
+                  form is selected.
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Project Settings -->
+          <section id="project-settings" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">
+              Global &amp; Project Settings
+            </h2>
+            <div class="space-y-3 text-neutral-300">
+              <p>
+                <span class="font-medium">Wallpaper &amp; brand:</span> define a
+                background URL for the editor; toggle brand canvas visibility
+                when nothing is open.
+              </p>
+              <p>
+                <span class="font-medium">Titles:</span> set Project Title and
+                Page Title for clarity in the header/HTML &lt;title&gt;.
+              </p>
+
+              <p>
+                <span class="font-medium">Toolbar:</span> hidden on small
+                screens; show/hide on desktop via Settings.
+              </p>
+              <p>
+                <span class="font-medium">Vim:</span> enable Vim keybindings for
+                selection navigation.
+              </p>
+              <p>
+                <span class="font-medium">Per‑project options:</span> NerdFonts,
+                Tailwind, Better Chrome Scrollbars, Peacock (accent).
+              </p>
+            </div>
+          </section>
+
+          <!-- Deploy -->
+          <section id="deploy" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Netlify Deploys</h2>
+            <p class="text-neutral-300 mb-3">
+              Publish in minutes. Use Preview for drafts and Production for your
+              real site.
+            </p>
+            <ol class="list-decimal pl-6 space-y-2 text-neutral-300">
+              <li>
+                Open
+                <span class="font-medium">Deploy to Netlify</span> (Settings
+                &amp; More). If prompted, set the Netlify API key.
+              </li>
+              <li>
+                Select an existing site or choose
+                <span class="font-medium">Create new site</span> and enter a
+                name.
+              </li>
+              <li>
+                Pick <span class="font-medium">Production</span> or
+                <span class="font-medium">Deploy Preview</span> and click
+                <span class="font-medium">Deploy</span>.
+              </li>
+              <li>
+                Use the post‑deploy dialog to open Preview/Production links (and
+                copy them for sharing).
+              </li>
+            </ol>
+            <div
+              class="mt-3 border-l-4 border-blue-400 pl-3 text-neutral-300 text-sm"
+            >
+              Tip: Keep Preview deploys for feature branches. Switch to
+              Production once you’re happy.
+            </div>
+          </section>
+
+          <!-- Import/Export -->
+          <section id="import-export" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">
+              Git &amp; ZIP Import/Export
+            </h2>
+            <div class="grid gap-4">
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">Import Git (HTTPS)</div>
+                <ol class="list-decimal pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Settings &amp; More →
+                    <span class="font-medium">Import Git (HTTPS)</span>.
+                  </li>
+                  <li>Paste the repo URL. Wait for branches; pick one.</li>
+                  <li>
+                    Provide a project name if requested, then
+                    <span class="font-medium">Import</span>.
+                  </li>
+                </ol>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">Import / Export ZIP</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    <span class="font-medium">Import ZIP</span> to load an
+                    archive into your project space.
+                  </li>
+                  <li>
+                    <span class="font-medium">Export ZIP</span> to share or back
+                    up your project quickly.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- Collaboration -->
+          <section id="collaboration" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Realtime Collaboration</h2>
+            <p class="text-neutral-300 mb-3">
+              Invite others to co‑edit with presence and a collab‑aware toolbar.
+            </p>
+            <ol class="list-decimal pl-6 space-y-2 text-neutral-300">
+              <li>
+                If available, open
+                <span class="font-medium">Collaborate</span> in Settings &amp;
+                More to get a share link.
+              </li>
+              <li>
+                Send the link to your peer. They’ll open a collab UI that shows
+                presence and selection state.
+              </li>
+              <li>
+                Footer indicates “Awaiting collaborators…” or “Collaborating
+                with N peers.”
+              </li>
+            </ol>
+            <div
+              class="mt-2 border-l-4 border-blue-400 pl-3 text-neutral-300 text-sm"
+            >
+              Note: Some setups require Cross‑origin isolation for RTC; toggle
+              it in Settings when available.
+            </div>
+          </section>
+
+          <!-- Companion -->
+          <section id="companion" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">
+              Companion, Shell, Companion FS
+            </h2>
+            <div class="space-y-3 text-neutral-300">
+              <p>
+                <span class="font-medium">Enable Companion</span> in Settings to
+                unlock the <span class="font-medium">Shell</span> (integrated
+                terminal).
+              </p>
+              <p>
+                The Shell panel supports multiple tabs. If authentication fails,
+                you’ll see a warning row with a
+                <span class="font-medium">Retry</span> button and guidance to
+                reconfigure the key.
+              </p>
+              <p>
+                <span class="font-medium">Companion FS</span> can store the
+                project via the Companion’s filesystem—toggle it per project in
+                Settings.
+              </p>
+            </div>
+          </section>
+
+          <!-- Database -->
+          <section id="database" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Database Collections</h2>
+            <p class="text-neutral-300 mb-3">
+              Organize collections of data for your app.
+            </p>
+            <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+              <li>
+                Create, rename, or delete collections from the
+                <span class="font-medium">DB</span> panel.
+              </li>
+              <li>
+                Select a collection to view/edit (when your setup supports
+                editing the data shape).
+              </li>
+            </ul>
+          </section>
+
+          <!-- Reference -->
+          <section id="reference" class="scroll-mt-20">
+            <h2 class="text-2xl font-semibold mb-2">Tips &amp; Shortcuts</h2>
+            <div class="grid gap-4">
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">Keyboard</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Undo / Redo:
+                    <code class="px-1 bg-black/40 rounded">Ctrl‑Z</code> /
+                    <code class="px-1 bg-black/40 rounded">Ctrl‑Y</code>.
+                  </li>
+                  <li>
+                    Vim movement (optional):
+                    <code class="px-1 bg-black/40 rounded">h j k l L</code>.
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">Troubleshooting</div>
+                <ul class="list-disc pl-6 space-y-1 text-neutral-300">
+                  <li>
+                    Toolbar missing? Switch to a desktop width or show the
+                    toolbar in Settings.
+                  </li>
+                  <li>
+                    Busy spinner? Wait for operations to complete; avoid rapid,
+                    conflicting actions.
+                  </li>
+                  <li>
+                    Companion auth fail? Use
+                    <span class="font-medium">Retry</span> or reconfigure the
+                    key in Settings.
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-black/40 rounded p-4">
+                <div class="font-semibold mb-1">Examples</div>
+                <div class="text-neutral-300 text-sm mb-2">
+                  Expressions you might set in dialogs:
+                </div>
+                <pre
+                  class="bg-black/40 rounded p-3 text-xs overflow-auto"
+                ><code>
+wf-if:          state.app.ready
+wf-map:         item of state.items
+wf-onclick:     post('app.addItem')
+wf-disabled:    !form.valid
+            </code></pre>
+              </div>
+            </div>
+          </section>
+        </main>
+        <footer
+          class="border-t border-black/50 bg-[#060a0fc0] backdrop-blur-[4px] text-neutral-400 text-xs px-6 py-4"
+        >
+          Webfoundry — Documentation
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

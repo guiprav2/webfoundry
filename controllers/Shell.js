@@ -1,5 +1,5 @@
-import { FitAddon } from 'https://esm.sh/xterm-addon-fit';
-import { Terminal } from 'https://esm.sh/xterm';
+import { FitAddon } from 'https://esm.run/xterm-addon-fit';
+import { Terminal } from 'https://esm.run/xterm';
 
 export default class Shell {
   state = { list: [] };

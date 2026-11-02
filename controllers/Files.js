@@ -1,6 +1,6 @@
-import * as pako from 'https://esm.sh/pako';
-import LightningFS from 'https://esm.sh/@isomorphic-git/lightning-fs';
-import git from 'https://esm.sh/isomorphic-git';
+import * as pako from 'https://esm.run/pako';
+import LightningFS from 'https://esm.run/@isomorphic-git/lightning-fs';
+import git from 'https://esm.run/isomorphic-git';
 import gitHttp from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js';
 import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
@@ -8,7 +8,7 @@ import rprojects from '../repos/rprojects.js';
 import structuredFiles from '../other/structuredFiles.js';
 import { debounce, joinPath, loadman } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 
 export default class Files {

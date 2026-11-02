@@ -98,9 +98,9 @@
         ></button>
         <button
           class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 IconsSidebar-playBtn nf-fa-play"
-          wf-if="state.designer.open &amp;&amp; state.files.current.startsWith('pages/') &amp;&amp; !state.designer.current?.preview"
           wf-onclick="post('designer.togglePreview')"
           value=""
+          wf-if="state.designer.open &amp;&amp; state.files.current.startsWith('pages/') &amp;&amp; !state.designer.current?.preview"
         ></button>
 
         <button
@@ -3088,15 +3088,15 @@
             >
               <div
                 class=""
-                wf-class="{{x.role === 'user' ? 'text-right text-sky-200' : 'text-left text-neutral-100'}}"
+                wf-class="{{x.role === 'user' ? 'text-right text-sky-200' : x.role === 'shell' ? 'text-left text-amber-200' : 'text-left text-neutral-100'}}"
                 wf-map="x of state.agent.entries"
               >
                 <div
                   class="text-xs uppercase tracking-wide text-neutral-400 mb-1"
                 >
-                  {{x.role === 'user' ? 'User' : 'Assistant'}}
+                  {{x.role === 'user' ? 'User' : x.role === 'shell' ? 'Shell' : 'Assistant'}}
                 </div>
-                <div>{{x.text}}</div>
+                <div class="whitespace-pre-wrap break-words">{{x.text}}</div>
               </div>
             </div>
             <div class="shrink-0 border-t border-black/50 flex flex-col">
@@ -3120,8 +3120,8 @@
 
           <div
             class="MorePanel flex flex-col text-neutral-100 border-r border-black/50 p-6 space-y-4 select-none shrink-0 overflow-auto bg-[#091017c0] backdrop-blur-[4px] w-full md:w-96"
-            wf-class="{{replaces w-96: state.app.demo ? 'w-64' : 'w-96'}}"
             wf-if="state.app.panel === 'settings'"
+            wf-class="{{replaces w-96: state.app.demo ? 'w-64' : 'w-96'}}"
           >
             <div>Settings &amp; More</div>
             <div class="ml-3">

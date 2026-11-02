@@ -1,6 +1,6 @@
 let STORAGE_KEY = 'webfoundry:openaiApiKey';
 let OPENAI_ENDPOINT = 'https://api.openai.com/v1/responses';
-let DEFAULT_MODEL = 'gpt-4o';
+let DEFAULT_MODEL = 'gpt-6-luna';
 
 let arrayify = value => Array.isArray(value) ? value : value == null ? [] : [value];
 

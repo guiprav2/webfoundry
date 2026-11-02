@@ -1,11 +1,11 @@
-import * as pako from 'https://esm.sh/pako';
+import * as pako from 'https://esm.run/pako';
 import RealtimeCollab from '../other/RealtimeCollab.js';
 import actions from '../other/actions.js';
-import diff from 'https://esm.sh/fast-diff';
-import morphdom from 'https://esm.sh/morphdom';
+import diff from 'https://esm.run/fast-diff';
+import morphdom from 'https://esm.run/morphdom';
 import rfiles from '../repos/rfiles.js';
-import { FitAddon } from 'https://esm.sh/xterm-addon-fit';
-import { Terminal } from 'https://esm.sh/xterm';
+import { FitAddon } from 'https://esm.run/xterm-addon-fit';
+import { Terminal } from 'https://esm.run/xterm';
 
 export default class Collab {
   state = {

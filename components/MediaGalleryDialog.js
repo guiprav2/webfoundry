@@ -1,6 +1,6 @@
-import * as pako from 'https://esm.sh/pako';
+import * as pako from 'https://esm.run/pako';
 import rfiles from '../repos/rfiles.js';
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { selectFile, isMedia } from '../other/util.js';
 
 export default class MediaGalleryDialog {

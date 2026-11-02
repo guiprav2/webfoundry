@@ -235,3 +235,21 @@ All `wf` commands accept `--cur` to target a different designer cursor (defaults
 * **Events**: `wf-on<event>="expr"`
 * **Lifecycle hooks**: `wf-onattach`, `wf-ondetach`
 * **Pages**: live in `pages/`, must include `<script type="module" src="../webfoundry/head.js"></script>` in `<head>`
+
+---
+
+## Sprites and transparent PNGs
+
+A sprite, a prop, or a UI frame that sits on top of another picture is a cutout. The source picture is the figure or the ornament on one flat backdrop color: no floor, no cast shadow, no furniture, no extra background. A chair painted into the sprite cannot sit in the room. Poses of one character share a baseline. The plate or the room is a separate image and stays opaque. The subject may contain green. That green is not the backdrop.
+
+Put that source file in the project, then call `remove_background`. `input` is the source path. `output` must end in `.png`. `color` is the exact backdrop color as `#rrggbb`, read off the backdrop, not off the costume. The tool removes pixels by distance to that color and feathers the edge. A lime shirt stays when the backdrop is a different green. It writes a transparent PNG.
+
+Use `remove_background` only when the background is a flat key color that should disappear. Leave plates, photos, and pictures whose background is part of the art alone.
+
+In page HTML, an image `src` is `../images/...`. Mounting the page strips one leading `../` from `src` and from every CSS `url(...)`, including `background-image` and `border-image-source`. This is the same one prefix, once:
+
+```html
+style="border-image-source: url('../images/ui/dialog-frame.png')"
+```
+
+`run_js` runs in the open page iframe. The visual editor has to be open or it throws. `args` is a map of parameter names to values, and `body` is the function body. `run_js({ args: { x: 1, y: 2 }, body: 'return x + y' })` is `await new AsyncFunction('x', 'y', 'return x + y')(1, 2)`. Return the value you want back. `document` is the page.

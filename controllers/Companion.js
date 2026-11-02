@@ -1,4 +1,4 @@
-import EventEmitter from 'https://esm.sh/eventemitter2';
+import EventEmitter from 'https://esm.run/eventemitter2';
 
 export default class Companion {
   state = { pollDelay: 2000, pollTimeout: null, rpcs: {} };
@@ -194,7 +194,7 @@ function createClient(key, opt = {}) {
   return ret;
 }
 
-async function execWfCommand(command) {
+export async function execWfCommand(command) {
   if (!command || typeof command !== 'object') throw new Error('Invalid command payload.');
   let { name, params = {} } = command;
   if (!name) throw new Error('Command name missing.');

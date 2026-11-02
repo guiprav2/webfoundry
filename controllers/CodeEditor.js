@@ -1,9 +1,9 @@
 import { isMedia, debounce } from '../other/util.js';
 import { mountCodeMirror } from '../other/codemirror.js';
 import rfiles from '../repos/rfiles.js';
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
-import * as Y from 'https://esm.sh/yjs@13.6.12?bundle';
-import { CodemirrorBinding } from 'https://esm.sh/y-codemirror?bundle';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
+import * as Y from 'https://esm.run/yjs@13.6.12';
+import { CodemirrorBinding } from 'https://esm.run/y-codemirror';
 
 let UPDATE_SOURCE_REMOTE = Symbol('codeEditor.remote');
 let COLOR_MAP = {

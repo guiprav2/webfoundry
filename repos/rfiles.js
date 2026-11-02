@@ -1,7 +1,7 @@
-import JSZip from 'https://esm.sh/jszip';
-import lf from 'https://esm.sh/localforage';
+import JSZip from 'https://esm.run/jszip';
+import lf from 'https://esm.run/localforage';
 import rprojects from './rprojects.js';
-import { lookup as mimeLookup } from 'https://esm.sh/mrmime';
+import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 
 class FilesRepository {
   async list(project) {

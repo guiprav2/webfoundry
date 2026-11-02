@@ -1,4 +1,4 @@
-import git from 'https://esm.sh/isomorphic-git';
+import git from 'https://esm.run/isomorphic-git';
 import gitHttp from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js';
 
 export let gitCorsProxy = 'https://cors.isomorphic-git.org';

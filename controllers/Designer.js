@@ -1,8 +1,8 @@
 import BiMap from '../other/bimap.js';
-import Boo from 'https://esm.sh/@camilaprav/boo@1.0.6';
+import Boo from 'https://esm.run/@camilaprav/boo@1.0.6';
 import actions from '../other/actions.js';
-import htmlsnap from 'https://esm.sh/@camilaprav/htmlsnap@0.0.16';
-import morphdom from 'https://esm.sh/morphdom';
+import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
+import morphdom from 'https://esm.run/morphdom';
 import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
 import { arrayify, debounce } from '../other/util.js';

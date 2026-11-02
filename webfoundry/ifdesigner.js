@@ -1,8 +1,8 @@
 import BiMap from './bimap.js';
-import Boo from 'https://esm.sh/@camilaprav/boo@1.0.6';
+import Boo from 'https://esm.run/@camilaprav/boo@1.0.6';
 import d from './dominant.js';
-import htmlsnap from 'https://esm.sh/@camilaprav/htmlsnap@0.0.16';
-import morphdom from 'https://esm.sh/morphdom';
+import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
+import morphdom from 'https://esm.run/morphdom';
 
 window.state = { map: new BiMap(), cursors: {}, overlays: {} };
 let wforigin = new URL(location.href).searchParams.get('isolate') || location.origin;

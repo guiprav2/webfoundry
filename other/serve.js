@@ -27,6 +27,8 @@ const MIME_TYPES = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
+  '.AppImage': 'application/octet-stream',
+  '.mjs': 'application/javascript; charset=utf-8',
 };
 
 function readOptional(filePath) {

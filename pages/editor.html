@@ -3499,6 +3499,16 @@
                 <button
                   class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none"
                   wf-disabled="loadman.busy()"
+                  wf-onclick="event.preventDefault(), post('files.exportNative')"
+                  wf-if="state.projects.current"
+                  value=""
+                >
+                  <div>Export native app</div>
+                </button>
+
+                <button
+                  class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none"
+                  wf-disabled="loadman.busy()"
                   wf-onclick="event.preventDefault(), post('files.deploy')"
                   wf-if="state.projects.current"
                   value=""

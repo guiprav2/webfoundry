@@ -10,6 +10,7 @@ import { debounce, joinPath, loadman } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
 import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
+import { downloadBlob, exportLinuxAppImage } from '../nasty/export-native.js';
 
 export default class Files {
   state = {
@@ -579,6 +580,47 @@ export default class Files {
       document.querySelector('dialog')?.remove?.();
       let a = d.html`<a class="hidden" ${{ download: `${project.split(':')[0]}.zip`, href: URL.createObjectURL(blob) }}>`;
       document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    },
+
+    exportNative: async () => {
+      let project = state.projects.current;
+      if (!project) return;
+      let btn, options;
+      try {
+        [btn, options] = await showModal('NativeExportDialog');
+      } catch (err) {
+        console.error(err);
+        await showModal('InfoDialog', { title: `Native export dialog failed: ${err.message}` });
+        return;
+      }
+      if (btn !== 'ok' || !options) return;
+      // Older dialogs returned a bare target string; accept either shape.
+      let target = typeof options === 'string' ? options : options.target;
+      let windowOpts = typeof options === 'string' ? {} : options;
+      if (target !== 'linux-x64') {
+        await showModal('InfoDialog', { title: `Target ${target} is not available yet.` });
+        return;
+      }
+      let name = project.split(':')[0];
+      showModal('LoadingDialog', { msg: 'Building native AppImage...' });
+      try {
+        let blob = await exportLinuxAppImage(project, {
+          name,
+          width: windowOpts.width,
+          height: windowOpts.height,
+          startMaximized: windowOpts.startMaximized,
+          rememberDimensions: windowOpts.rememberDimensions,
+          borderless: windowOpts.borderless,
+          dragAnywhere: windowOpts.dragAnywhere,
+          documentClassNames: windowOpts.documentClassNames,
+        });
+        document.querySelector('dialog')?.remove?.();
+        downloadBlob(blob, `${name}-x86_64.AppImage`);
+      } catch (err) {
+        console.error(err);
+        document.querySelector('dialog')?.remove?.();
+        await showModal('InfoDialog', { title: `Native export failed: ${err.message}` });
+      }
     },
   };
 };

@@ -357,7 +357,9 @@ function stripCssDotDot(style) {
 }
 
 function compile(root) {
-  root.style.display = '';
+  // Prefer classes over inline style (Nasty keeps element.style read-only).
+  root.hidden = false;
+  root.classList?.remove?.('hidden', 'invisible');
   for (let x of [root, ...root.querySelectorAll('*')]) {
     let ifExpr = x.getAttribute('wf-if');
     let mapExpr = x.getAttribute('wf-map');
@@ -510,7 +512,14 @@ function compile(root) {
       x.src = x.getAttribute('src').slice(3);
     }
 
-    if (x.style?.length) stripCssDotDot(x.style);
+    // Skip when style is missing or read-only (Nasty); still rewrite on the web.
+    try {
+      if (x.style?.length && typeof x.style.setProperty === 'function') {
+        stripCssDotDot(x.style);
+      }
+    } catch {
+      /* ignore read-only style hosts */
+    }
 
     if (x.getAttribute('wf-href')) {
       let expr = x.getAttribute('wf-href');

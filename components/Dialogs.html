@@ -710,6 +710,134 @@
           </div>
         </div>
         <div class="p-8 flex flex-col items-center gap-6">
+          <div class="text-3xl">NativeExportDialog</div>
+
+          <div
+            id="NativeExportDialog"
+            class="outline-none rounded-lg shadow-xl w-[28rem] text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+          >
+            <form
+              method="dialog"
+              wf-onsubmit="this.onSubmit(event)"
+              class="flex flex-col gap-1.5"
+            >
+              <div class="">Export native app</div>
+              <div class="text-sm text-neutral-400 mb-2">
+                Downloads a self-contained AppImage (linux-x64) with your project
+                appended to the Nasty runtime.
+              </div>
+              <div class="mb-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  class="w-full text-left rounded px-3 py-2 border border-transparent bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  wf-map="t of this.targets"
+                  wf-onclick="this.select(t.id)"
+                  wf-class="{{this.target === t.id &amp;&amp; 'border-[#2a9df4] bg-[#0b1521]'}} {{!t.available &amp;&amp; 'opacity-40'}}"
+                  value=""
+                >
+                  {{t.label}}
+                </button>
+              </div>
+              <div class="text-sm text-neutral-300 mb-1">Default window size</div>
+              <div class="mb-3 flex gap-2">
+                <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
+                  Width
+                  <input
+                    type="number"
+                    min="200"
+                    max="10000"
+                    step="1"
+                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                    wf-value="this.width"
+                    value="1280"
+                  />
+                </label>
+                <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
+                  Height
+                  <input
+                    type="number"
+                    min="200"
+                    max="10000"
+                    step="1"
+                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                    wf-value="this.height"
+                    value="800"
+                  />
+                </label>
+              </div>
+              <label
+                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-[#2a9df4]"
+                  wf-checked="this.startMaximized"
+                  value="on"
+                />
+                <span>Start maximized</span>
+              </label>
+              <label
+                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-[#2a9df4]"
+                  wf-checked="this.rememberDimensions"
+                  value="on"
+                />
+                <span>Remember window dimensions</span>
+              </label>
+              <label
+                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-[#2a9df4]"
+                  wf-checked="this.borderless"
+                  value="on"
+                />
+                <span>Make window borderless</span>
+              </label>
+              <label
+                class="mb-3 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-[#2a9df4]"
+                  wf-checked="this.dragAnywhere"
+                  value="on"
+                />
+                <span>Enable drag anywhere</span>
+              </label>
+              <label class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5">
+                Document class names
+                <input
+                  type="text"
+                  class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                  placeholder="e.g. rounded-2xl overflow-hidden"
+                  wf-value="this.documentClassNames"
+                  value=""
+                />
+              </label>
+              <div class="flex gap-2 justify-end">
+                <button
+                  value="cancel"
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  value="ok"
+                  class="rounded px-4 py-2 bg-[#0071b2] hover:bg-[#008ad9] outline-none text-sm disabled:opacity-50"
+                  wf-disabled="!this.valid"
+                >
+                  Export
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="p-8 flex flex-col items-center gap-6">
           <div class="text-3xl">NetlifyPostDeployDialog</div>
 
           <div

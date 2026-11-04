@@ -347,7 +347,12 @@ function mapChildNodes(n, fn) {
   }
 }
 
-function wfeval(n, expr, ...args) {
+// wf-on* may use `await post(...)`; sync `new Function` is a SyntaxError for that
+// (Chrome: missing ) in parenthetical; Node: Unexpected identifier 'post').
+// Bindings (wf-if/map/value/{{…}}) stay on sync Function via wfeval.
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+
+function wfevalCtx(n) {
   let ctx = {};
   while (n) {
     for (let [k, v] of Object.entries(n.ctx || {})) {
@@ -357,8 +362,13 @@ function wfeval(n, expr, ...args) {
   }
   let self = ctx.this;
   delete ctx.this;
+  return { ctx, self };
+}
+
+function wfeval(n, expr, ...args) {
+  let { ctx, self } = wfevalCtx(n);
   let argNames = args.map((x, i) => `_${i + 1}`);
-  let r = self
+  return self
     ? new Function(...Object.keys(ctx), ...argNames, `return (${expr})`).apply(
         self,
         [...Object.values(ctx), ...args],
@@ -367,10 +377,24 @@ function wfeval(n, expr, ...args) {
         ...Object.values(ctx),
         ...args,
       );
-  return r;
+}
+
+function wfevalAsync(n, expr, ...args) {
+  let { ctx, self } = wfevalCtx(n);
+  let argNames = args.map((x, i) => `_${i + 1}`);
+  return self
+    ? AsyncFunction(...Object.keys(ctx), ...argNames, `return (${expr})`).apply(
+        self,
+        [...Object.values(ctx), ...args],
+      )
+    : AsyncFunction(...Object.keys(ctx), ...argNames, `return (${expr})`)(
+        ...Object.values(ctx),
+        ...args,
+      );
 }
 
 window.wfeval = wfeval;
+window.wfevalAsync = wfevalAsync;
 
 function rewriteCssUrls(value) {
   return value.replace(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/g, (full, quote, url) => {
@@ -442,13 +466,13 @@ function compile(root) {
     let onAttachExpr = x.getAttribute('wf-onattach');
     if (onAttachExpr) {
       x.removeAttribute('wf-onattach');
-      d.el(x, { onAttach: y => wfeval(x, onAttachExpr, y) });
+      d.el(x, { onAttach: y => wfevalAsync(x, onAttachExpr, y) });
     }
 
     let onDetachExpr = x.getAttribute('wf-ondetach');
     if (onDetachExpr) {
       x.removeAttribute('wf-ondetach');
-      d.el(x, { onDetach: y => wfeval(x, onDetachExpr, y) });
+      d.el(x, { onDetach: y => wfevalAsync(x, onDetachExpr, y) });
     }
 
     let removedAttrs = [];
@@ -461,7 +485,7 @@ function compile(root) {
         continue;
       }
       removedAttrs.push(name);
-      d.el(x, { [name.slice(3)]: () => wfeval(x, value) });
+      d.el(x, { [name.slice(3)]: () => wfevalAsync(x, value) });
     }
 
     for (let y of removedAttrs) {

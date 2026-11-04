@@ -226,6 +226,26 @@ export async function execWfCommand(command) {
         missingIds: res?.missingIds ?? [],
       };
     }
+    case 'isPlatformPreview': {
+      let action = actions.isPlatformPreview;
+      let result = await action.handler(params);
+      if (result !== undefined) return result;
+      let mode = state.settings.opt.platformPreview;
+      if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
+      return { success: true, mode };
+    }
+    case 'setPlatformPreview': {
+      let action = actions.setPlatformPreview;
+      let mode = params.mode;
+      if (typeof mode === 'string') mode = mode.trim().toLowerCase();
+      if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
+        return { success: false, error: 'mode must be off, desktop, or mobile' };
+      }
+      let reasons = action.disabled?.({ mode })?.filter?.(Boolean) || [];
+      if (reasons.length) return { success: false, error: reasons.map(x => `- ${x}`).join('\n') };
+      let result = await action.handler({ mode });
+      return result === undefined ? { success: true, mode } : result;
+    }
     case 'selectFile': {
       let action = actions[name];
       let reasons = action.disabled?.(params)?.filter?.(Boolean) || [];

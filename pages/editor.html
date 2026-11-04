@@ -1017,13 +1017,24 @@
               <button
                 type="button"
                 class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10"
-                title="Preview native:* Tailwind utilities"
-                wf-if="state.designer.hasNativeClasses"
-                wf-class="{{state.settings.opt.nativePreview &amp;&amp; 'bg-white/15'}}"
-                wf-onclick="event.preventDefault(), post('designer.toggleNativePreview')"
+                title="Preview native:* and desktop:* Tailwind utilities"
+                wf-if="state.designer.hasPlatformClasses"
+                wf-class="{{state.settings.opt.platformPreview === 'desktop' &amp;&amp; 'bg-white/15'}}"
+                wf-onclick="event.preventDefault(), post('designer.togglePlatformPreview', 'desktop')"
                 value=""
               >
-                Native Preview
+                Desktop Preview
+              </button>
+              <button
+                type="button"
+                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10"
+                title="Preview native:* and mobile:* Tailwind utilities"
+                wf-if="state.designer.hasPlatformClasses"
+                wf-class="{{state.settings.opt.platformPreview === 'mobile' &amp;&amp; 'bg-white/15'}}"
+                wf-onclick="event.preventDefault(), post('designer.togglePlatformPreview', 'mobile')"
+                value=""
+              >
+                Mobile Preview
               </button>
               <button
                 class="nf outline-none nf-md-refresh p-1.5"

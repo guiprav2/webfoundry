@@ -10,7 +10,7 @@ import { debounce, joinPath, loadman } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
 import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
-import { downloadBlob, exportLinuxAppImage } from '../nasty/export-native.js';
+import { downloadBlob, exportAndroidApk, exportLinuxAppImage } from '../nasty/export-native.js';
 
 export default class Files {
   state = {
@@ -597,25 +597,38 @@ export default class Files {
       // Older dialogs returned a bare target string; accept either shape.
       let target = typeof options === 'string' ? options : options.target;
       let windowOpts = typeof options === 'string' ? {} : options;
-      if (target !== 'linux-x64') {
+      if (target !== 'linux-x64' && target !== 'android-arm64') {
         await showModal('InfoDialog', { title: `Target ${target} is not available yet.` });
         return;
       }
       let name = project.split(':')[0];
-      showModal('LoadingDialog', { msg: 'Building native AppImage...' });
+      showModal('LoadingDialog', { msg: 'Exporting native app' });
       try {
-        let blob = await exportLinuxAppImage(project, {
-          name,
-          width: windowOpts.width,
-          height: windowOpts.height,
-          startMaximized: windowOpts.startMaximized,
-          rememberDimensions: windowOpts.rememberDimensions,
-          borderless: windowOpts.borderless,
-          dragAnywhere: windowOpts.dragAnywhere,
-          documentClassNames: windowOpts.documentClassNames,
-        });
+        let blob;
+        let filename;
+        if (target === 'android-arm64') {
+          blob = await exportAndroidApk(project, {
+            name,
+            orientation: windowOpts.orientation,
+            documentClassNames: windowOpts.documentClassNames,
+          });
+          filename = `${name}.apk`;
+        } else {
+          blob = await exportLinuxAppImage(project, {
+            name,
+            width: windowOpts.width,
+            height: windowOpts.height,
+            startMaximized: windowOpts.startMaximized,
+            rememberDimensions: windowOpts.rememberDimensions,
+            borderless: windowOpts.borderless,
+            dragAnywhere: windowOpts.dragAnywhere,
+            resizable: windowOpts.resizable,
+            documentClassNames: windowOpts.documentClassNames,
+          });
+          filename = `${name}-x86_64.AppImage`;
+        }
         document.querySelector('dialog')?.remove?.();
-        downloadBlob(blob, `${name}-x86_64.AppImage`);
+        downloadBlob(blob, filename);
       } catch (err) {
         console.error(err);
         document.querySelector('dialog')?.remove?.();

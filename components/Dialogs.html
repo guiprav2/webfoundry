@@ -723,8 +723,8 @@
             >
               <div class="">Export native app</div>
               <div class="text-sm text-neutral-400 mb-2">
-                Downloads a self-contained AppImage (linux-x64) with your project
-                appended to the Nasty runtime.
+                Downloads a self-contained native bundle with your project on the
+                Nasty runtime (Linux AppImage or Android APK).
               </div>
               <div class="mb-3 flex flex-col gap-2">
                 <button
@@ -738,77 +738,104 @@
                   {{t.label}}
                 </button>
               </div>
-              <div class="text-sm text-neutral-300 mb-1">Default window size</div>
-              <div class="mb-3 flex gap-2">
-                <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
-                  Width
+              <div wf-if="this.isDesktop">
+                <div class="text-sm text-neutral-300 mb-1">Default window size</div>
+                <div class="mb-3 flex gap-2">
+                  <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
+                    Width
+                    <input
+                      type="number"
+                      min="200"
+                      max="10000"
+                      step="1"
+                      class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                      wf-value="this.width"
+                      value="1280"
+                    />
+                  </label>
+                  <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
+                    Height
+                    <input
+                      type="number"
+                      min="200"
+                      max="10000"
+                      step="1"
+                      class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                      wf-value="this.height"
+                      value="800"
+                    />
+                  </label>
+                </div>
+                <label
+                  class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+                >
                   <input
-                    type="number"
-                    min="200"
-                    max="10000"
-                    step="1"
-                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
-                    wf-value="this.width"
-                    value="1280"
+                    type="checkbox"
+                    class="accent-[#2a9df4]"
+                    wf-checked="this.startMaximized"
+                    value="on"
                   />
+                  <span>Start maximized</span>
                 </label>
-                <label class="flex-1 flex flex-col gap-1 text-xs text-neutral-400">
-                  Height
+                <label
+                  class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+                >
                   <input
-                    type="number"
-                    min="200"
-                    max="10000"
-                    step="1"
-                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
-                    wf-value="this.height"
-                    value="800"
+                    type="checkbox"
+                    class="accent-[#2a9df4]"
+                    wf-checked="this.rememberDimensions"
+                    value="on"
                   />
+                  <span>Remember window dimensions</span>
+                </label>
+                <label
+                  class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-[#2a9df4]"
+                    wf-checked="this.borderless"
+                    value="on"
+                  />
+                  <span>Make window borderless</span>
+                </label>
+                <label
+                  class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-[#2a9df4]"
+                    wf-checked="this.dragAnywhere"
+                    value="on"
+                  />
+                  <span>Enable drag anywhere</span>
+                </label>
+                <label class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5">
+                  Resizable
+                  <select
+                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                    wf-value="this.resizable"
+                  >
+                    <option value="both">Both</option>
+                    <option value="horizontal">Horizontal</option>
+                    <option value="vertical">Vertical</option>
+                    <option value="none">None</option>
+                  </select>
                 </label>
               </div>
-              <label
-                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-[#2a9df4]"
-                  wf-checked="this.startMaximized"
-                  value="on"
-                />
-                <span>Start maximized</span>
-              </label>
-              <label
-                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-[#2a9df4]"
-                  wf-checked="this.rememberDimensions"
-                  value="on"
-                />
-                <span>Remember window dimensions</span>
-              </label>
-              <label
-                class="mb-1 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-[#2a9df4]"
-                  wf-checked="this.borderless"
-                  value="on"
-                />
-                <span>Make window borderless</span>
-              </label>
-              <label
-                class="mb-3 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-[#2a9df4]"
-                  wf-checked="this.dragAnywhere"
-                  value="on"
-                />
-                <span>Enable drag anywhere</span>
-              </label>
+              <div wf-if="this.isAndroid">
+                <label class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5">
+                  Orientation
+                  <select
+                    class="outline-none w-full rounded px-2 py-1.5 bg-[#2b2d3130] focus:bg-[#2b2d3150] text-sm text-neutral-100"
+                    wf-value="this.orientation"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </select>
+                </label>
+              </div>
               <label class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5">
                 Document class names
                 <input

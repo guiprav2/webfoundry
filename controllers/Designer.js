@@ -83,13 +83,15 @@ export default class Designer {
       for (let s of ss) for (let cls of s.classList) { let match = cls.match(BG_COLOR_RE); if (match) return match[1] }
     },
 
-    // True when the htmlsnap mirror has any native:* class token — drives the
-    // Native Preview control visibility next to refresh.
-    get hasNativeClasses() {
+    // True when the htmlsnap mirror has native:*, desktop:*, or mobile:* —
+    // drives Desktop/Mobile Preview controls next to refresh.
+    get hasPlatformClasses() {
       let doc = this.current?.doc;
       if (!doc) return false;
       for (let el of doc.querySelectorAll('[class]')) {
-        for (let cls of el.classList) if (/(?:^|:)native:/.test(cls)) return true;
+        for (let cls of el.classList) {
+          if (/(?:^|:)(?:native|desktop|mobile):/.test(cls)) return true;
+        }
       }
       return false;
     },
@@ -144,7 +146,7 @@ export default class Designer {
             if (ev.data.status !== 200) return frame.reject(ev.data.error);
             frame.ready = true;
             frame.resolve();
-            await post('designer.applyNativePreview', frame);
+            await post('designer.applyPlatformPreview', frame);
             await post('designer.sync', frame);
             await post('files.reflect'); // For templates.
             break;
@@ -158,7 +160,7 @@ export default class Designer {
             }
             htmlsnap(frame.doc.documentElement, { idtrack: true, map: frame.map });
             state.collab.uid === 'master' && await post('designer.save', frame);
-            await post('designer.applyNativePreview', frame);
+            await post('designer.applyPlatformPreview', frame);
             await post('designer.sync', frame);
             d.update();
             state.event.bus.emit('designer:htmlsnap:ready', { project, frame });
@@ -226,6 +228,10 @@ export default class Designer {
       type: 'state',
       collab: { uid: state.collab.uid, rtc: { presence: state.collab.rtc?.presence } },
       cursors: frame.cursors,
+      // Re-apply after ready/htmlsnap; isolate iframes cannot use contentDocument.
+      platformPreview: state.settings.opt.platformPreview === 'desktop' || state.settings.opt.platformPreview === 'mobile'
+        ? state.settings.opt.platformPreview
+        : 'off',
     }, new URL(frame.el.src).origin),
 
     resize: ev => {
@@ -364,20 +370,48 @@ export default class Designer {
       await loadman.run('designer.refresh', async () => { frame.el.src = frame.el.src; await p.promise });
     },
 
-    // Gate Tailwind native:* in the live iframe via html[wf-native-preview].
-    // Authored class lists are never rewritten.
-    applyNativePreview: (frame = this.state.current) => {
-      let enabled = !!state.settings.opt.nativePreview;
-      let root = frame?.el?.contentDocument?.documentElement;
-      if (!root) return;
-      if (enabled) root.setAttribute('wf-native-preview', '');
-      else root.removeAttribute('wf-native-preview');
+    // Gate native:/desktop:/mobile: via html preview attrs inside the preview iframe.
+    // Isolate (default) is cross-origin — use ifdesigner eval + platformPreview message.
+    applyPlatformPreview: (frame = this.state.current) => {
+      let win = frame?.el?.contentWindow;
+      if (!win || !frame?.el?.src) return;
+      let mode = state.settings.opt.platformPreview;
+      if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
+      let origin = new URL(frame.el.src).origin;
+      let fn = `if (!document.querySelector('style.wf-platform-variants')) {
+  let s = document.createElement('style');
+  s.type = 'text/tailwindcss';
+  s.className = 'wf-platform-variants';
+  s.textContent = '@custom-variant native (html:where([wf-native-preview]) &);\\n@custom-variant desktop (html[wf-desktop-preview] &);\\n@custom-variant mobile (html[wf-mobile-preview] &);\\n';
+  document.head.append(s);
+}
+let root = document.documentElement;
+root.removeAttribute('wf-desktop-preview');
+root.removeAttribute('wf-mobile-preview');
+root.removeAttribute('wf-native-preview');
+if (args.mode === 'desktop') {
+  root.setAttribute('wf-desktop-preview', '');
+  root.setAttribute('wf-native-preview', '');
+} else if (args.mode === 'mobile') {
+  root.setAttribute('wf-mobile-preview', '');
+  root.setAttribute('wf-native-preview', '');
+}`;
+      win.postMessage({ type: 'eval', fn, rpcid: crypto.randomUUID(), args: { mode } }, origin);
+      win.postMessage({ type: 'platformPreview', mode }, origin);
     },
 
-    toggleNativePreview: async () => {
-      await post('settings.option', 'nativePreview');
-      await post('designer.applyNativePreview');
+    setPlatformPreview: async (mode) => {
+      if (mode !== 'desktop' && mode !== 'mobile' && mode !== 'off') {
+        throw new Error('platform preview mode must be desktop, mobile, or off');
+      }
+      await post('settings.option', 'platformPreview', mode);
+      await post('designer.applyPlatformPreview');
       d.update();
+    },
+
+    togglePlatformPreview: async (mode) => {
+      let next = state.settings.opt.platformPreview === mode ? 'off' : mode;
+      await post('designer.setPlatformPreview', next);
     },
   };
 };

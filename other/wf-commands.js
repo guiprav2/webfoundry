@@ -56,6 +56,8 @@ function helpText() {
   lines.push('  wf read-html');
   lines.push('  wf change-selection --ids section_1_a3 section_1_a4');
   lines.push('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
+  lines.push('  wf set-platform-preview desktop');
+  lines.push('  wf is-platform-preview');
   return lines.map(line => line + '\n').join('');
 }
 
@@ -237,6 +239,28 @@ let subcommands = {
     build: ({ flags }) => ({ name: 'toggleHidden', params: { cur: flags.cur || 'master' } }),
     format: formatToggleHiddenResult,
   },
+  'is-platform-preview': {
+    description: 'Print IDE platform preview mode (off, desktop, or mobile) for desktop:*/mobile:*.',
+    build: () => ({ name: 'isPlatformPreview' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(result.mode || 'off');
+    },
+  },
+  'set-platform-preview': {
+    description: 'Set IDE platform preview to off, desktop, or mobile (desktop:*/mobile:* in the designer iframe).',
+    build: ({ flags, positionals }) => {
+      let raw = String(flags.mode ?? flags.value ?? positionals[0] ?? '').trim().toLowerCase();
+      if (raw !== 'off' && raw !== 'desktop' && raw !== 'mobile') {
+        throw new Error('Specify off, desktop, or mobile (e.g. wf set-platform-preview desktop).');
+      }
+      return { name: 'setPlatformPreview', params: { mode: raw } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Platform Preview: ${result.mode || 'off'}`);
+    },
+  },
   'change-html': {
     description: 'Replace the outer HTML of the selected element.',
     build: ({ flags }) => {
@@ -350,6 +374,13 @@ function parseCount(value) {
   let n = Number(value);
   if (!Number.isFinite(n) || n < 1) throw new Error('count must be a positive integer');
   return Math.floor(n);
+}
+
+function parseTrueFalse(raw) {
+  let s = String(raw).trim().toLowerCase();
+  if (s === 'true') return true;
+  if (s === 'false') return false;
+  throw new Error(`Expected true or false, got: ${raw}`);
 }
 
 function gatherClasses(flags, positionals) {

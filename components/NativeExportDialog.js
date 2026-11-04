@@ -1,3 +1,6 @@
+const RESIZABLE_MODES = new Set(['both', 'horizontal', 'vertical', 'none']);
+const ORIENTATIONS = new Set(['auto', 'portrait', 'landscape']);
+
 const DEFAULTS = {
   width: 1280,
   height: 800,
@@ -5,8 +8,20 @@ const DEFAULTS = {
   rememberDimensions: true,
   borderless: false,
   dragAnywhere: false,
+  resizable: 'both',
+  orientation: 'auto',
   documentClassNames: '',
 };
+
+function normalizeResizable(value) {
+  let mode = String(value ?? DEFAULTS.resizable).trim().toLowerCase();
+  return RESIZABLE_MODES.has(mode) ? mode : DEFAULTS.resizable;
+}
+
+function normalizeOrientation(value) {
+  let mode = String(value ?? DEFAULTS.orientation).trim().toLowerCase();
+  return ORIENTATIONS.has(mode) ? mode : DEFAULTS.orientation;
+}
 
 function normalizeClassNames(value) {
   return String(value ?? '')
@@ -33,23 +48,38 @@ class NativeExportDialog {
     this.rememberDimensions = saved.rememberDimensions ?? DEFAULTS.rememberDimensions;
     this.borderless = saved.borderless ?? DEFAULTS.borderless;
     this.dragAnywhere = saved.dragAnywhere ?? DEFAULTS.dragAnywhere;
+    this.resizable = normalizeResizable(saved.resizable ?? DEFAULTS.resizable);
+    this.orientation = normalizeOrientation(saved.orientation ?? DEFAULTS.orientation);
     this.documentClassNames = normalizeClassNames(
       saved.documentClassNames ?? DEFAULTS.documentClassNames,
     );
     // Stable array identity — a getter that returns a fresh array each read
     // makes Dominant wf-map thrash and can freeze/crash the tab.
     this.targets = [
-      { id: 'linux-x64', label: 'Linux x64 (AppImage)', available: true },
+      { id: 'linux-x64', label: 'Linux x64', available: true },
       { id: 'win-x64', label: 'Windows x64 (coming soon)', available: false },
-      { id: 'android-arm64', label: 'Android arm64 (coming soon)', available: false },
+      { id: 'android-arm64', label: 'Android arm64', available: true },
     ];
+    if (!this.targets.some(t => t.id === this.target && t.available)) {
+      this.target = 'linux-x64';
+    }
+  }
+
+  get isAndroid() {
+    return this.target === 'android-arm64';
+  }
+
+  get isDesktop() {
+    return this.target === 'linux-x64' || this.target === 'win-x64';
   }
 
   get valid() {
     const targetOk = this.targets.some(t => t.id === this.target && t.available);
+    if (!targetOk) return false;
+    if (this.isAndroid) return ORIENTATIONS.has(this.orientation);
     const w = Number(this.width);
     const h = Number(this.height);
-    return targetOk && Number.isFinite(w) && w >= 200 && Number.isFinite(h) && h >= 200;
+    return Number.isFinite(w) && w >= 200 && Number.isFinite(h) && h >= 200;
   }
 
   select = id => {
@@ -66,16 +96,23 @@ class NativeExportDialog {
       return;
     }
     if (!this.valid) return;
-    const opts = {
-      target: this.target,
-      width: clampDim(this.width, DEFAULTS.width),
-      height: clampDim(this.height, DEFAULTS.height),
-      startMaximized: !!this.startMaximized,
-      rememberDimensions: !!this.rememberDimensions,
-      borderless: !!this.borderless,
-      dragAnywhere: !!this.dragAnywhere,
-      documentClassNames: normalizeClassNames(this.documentClassNames),
-    };
+    const opts = this.isAndroid
+      ? {
+          target: this.target,
+          orientation: normalizeOrientation(this.orientation),
+          documentClassNames: normalizeClassNames(this.documentClassNames),
+        }
+      : {
+          target: this.target,
+          width: clampDim(this.width, DEFAULTS.width),
+          height: clampDim(this.height, DEFAULTS.height),
+          startMaximized: !!this.startMaximized,
+          rememberDimensions: !!this.rememberDimensions,
+          borderless: !!this.borderless,
+          dragAnywhere: !!this.dragAnywhere,
+          resizable: normalizeResizable(this.resizable),
+          documentClassNames: normalizeClassNames(this.documentClassNames),
+        };
     try {
       await post('settings.projectOption', 'nativeExport', opts);
     } catch (err) {

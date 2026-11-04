@@ -2,33 +2,78 @@
   {
     let script = document.createElement('script');
     script.className = 'wf-gfont-script';
-    script.textContent = `let observer = new MutationObserver(muts => {
-  let gfonts = [];
-  for (let mut of muts) {
-    if (mut.type === 'childList') {
-      for (let x of mut.addedNodes) {
-        if (x.nodeType !== 1) continue;
-        for (let y of [x, ...x.querySelectorAll('*')]) {
-          gfonts.push(...[...y.classList].filter(x => x.match(/^gfont-\\[.+?\\]$/)).map((x) => x.slice('gfont-['.length, -1)));
-        }
-      }
-    } else if (mut.type === 'attributes') {
-      gfonts.push(...[...mut.target.classList].filter((x) => x.match(/^gfont-\\[.+?\\]$/)).map(x => x.slice('gfont-['.length, -1)));
+    script.textContent = `
+(function () {
+  let re = /^gfont-\\[.+?\\]$/;
+  let ensure = names => {
+    let uniq = [...new Set(names.filter(Boolean))];
+    for (let x of uniq) {
+      let id = 'gfont-[' + x + ']';
+      if (document.getElementById(id)) continue;
+      // <link> is more reliable than @import inside a dynamic <style>,
+      // especially when preview mounts the page after head.js has booted.
+      let link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      link.href =
+        'https://fonts.googleapis.com/css2?family=' +
+        encodeURIComponent(x.replace(/_/g, ' ')).replace(/%20/g, '+') +
+        ':ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap';
+      document.head.append(link);
+      let style = document.createElement('style');
+      style.id = id + '-rule';
+      style.textContent =
+        '.gfont-\\\\[' + x + '\\\\] { font-family: "' + x.replace(/_/g, ' ') + '" }';
+      document.head.append(style);
     }
+  };
+  let collectFromEl = el => {
+    if (!el || el.nodeType !== 1 || !el.classList) return [];
+    return [...el.classList].filter(c => re.test(c)).map(c => c.slice('gfont-['.length, -1));
+  };
+  let scanTree = root => {
+    if (!root || root.nodeType !== 1) {
+      root = document.documentElement;
+    }
+    if (!root) return;
+    let names = collectFromEl(root);
+    for (let y of root.querySelectorAll('*')) names.push(...collectFromEl(y));
+    ensure(names);
+  };
+  let observer = new MutationObserver(muts => {
+    let gfonts = [];
+    for (let mut of muts) {
+      if (mut.type === 'childList') {
+        for (let x of mut.addedNodes) {
+          if (x.nodeType !== 1) continue;
+          gfonts.push(...collectFromEl(x));
+          for (let y of x.querySelectorAll('*')) gfonts.push(...collectFromEl(y));
+        }
+      } else if (mut.type === 'attributes') {
+        gfonts.push(...collectFromEl(mut.target));
+      }
+    }
+    ensure(gfonts);
+  });
+  observer.observe(document.documentElement || document, {
+    attributes: true,
+    childList: true,
+    subtree: true,
+    attributeFilter: ['class'],
+  });
+  // Preview compiles/inserts pages asynchronously after this script runs.
+  // Keep scanning for a while so late mounts still pick up gfont-* classes.
+  scanTree(document.documentElement);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => scanTree(document.documentElement));
   }
-  for (let x of gfonts) {
-    let id = \`gfont-[\${x}]\`;
-    let style = document.getElementById(id);
-    if (style) continue;
-    style = document.createElement('style');
-    style.id = id;
-    style.textContent = \`@import url('https://fonts.googleapis.com/css2?family=\${x.replace(/_/g, '+')}:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
-.gfont-\\\\[\${x}\\\\] { font-family: "\${x.replace(/_/g, ' ')}" }
-\`;
-    document.head.append(style);
-  }
-});
-observer.observe(document, { attributes: true, childList: true, subtree: true });
+  let polls = 0;
+  let poll = setInterval(() => {
+    scanTree(document.documentElement);
+    polls++;
+    if (polls >= 40) clearInterval(poll); // ~10s at 250ms
+  }, 250);
+})();
 `;
     document.head.append(script);
   }

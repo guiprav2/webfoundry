@@ -96,6 +96,8 @@ let SHELL_COMMAND_GROUPS = [
       { syntax: 'changeFormMethod --method post', description: 'Update the method attribute on the selected form.', tool: 'changeFormMethod', args: [{ name: 'method', description: 'New form method' }] },
       { syntax: 'toggleHidden', description: 'Toggle the hidden attribute (useful alongside wf-if to declutter overlays).', tool: 'toggleHidden' },
       { syntax: 'setDisabledExpression expr', description: 'Set the wf-disabled expression.', tool: 'setDisabledExpression', args: [{ name: 'expr', description: 'Expression' }] },
+      { syntax: 'isPlatformPreview', description: 'IDE platform preview mode: off, desktop, or mobile (desktop:*/mobile:* in the designer).', tool: 'isPlatformPreview' },
+      { syntax: 'setPlatformPreview off|desktop|mobile', description: 'Set IDE platform preview mode for desktop:*/mobile:* utilities.', tool: 'setPlatformPreview', args: [{ name: 'mode', description: 'off, desktop, or mobile' }] },
     ],
   },
   {
@@ -2393,6 +2395,33 @@ let actions = window.actions = {
           }
         }, { targets: targetKeys, prev, apply });
       });
+    },
+  },
+
+  isPlatformPreview: {
+    description: `Returns IDE platform preview mode (off | desktop | mobile) for desktop:*/mobile:* utilities`,
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      let mode = state.settings.opt.platformPreview;
+      if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
+      return { success: true, mode };
+    },
+  },
+
+  setPlatformPreview: {
+    description: `Set IDE platform preview to off, desktop, or mobile so desktop:*/mobile:* utilities apply in the designer iframe`,
+    parameters: {
+      type: 'object',
+      properties: { mode: { type: 'string', enum: ['off', 'desktop', 'mobile'] } },
+      required: ['mode'],
+    },
+    handler: async ({ mode } = {}) => {
+      if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
+        throw new Error('mode must be off, desktop, or mobile');
+      }
+      if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setPlatformPreview', mode });
+      await post('designer.setPlatformPreview', mode);
+      return { success: true, mode };
     },
   },
 

@@ -28,6 +28,7 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.AppImage': 'application/octet-stream',
+  '.apk': 'application/vnd.android.package-archive',
   '.mjs': 'application/javascript; charset=utf-8',
 };
 

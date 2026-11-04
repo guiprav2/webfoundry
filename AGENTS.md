@@ -22,6 +22,8 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * When special editing DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting `flex justify-center items-center` on a container).
 * Event handler attributes are always e.g. wf-onclick="post('ctrl.action')". Not wf-on-click="...", not data-onclick="...", not even native onclick="...".
 * wf-\* attributes only apply where their native equivalents apply. E.g. wf-value is only valid for \<input>, \<textarea>, etc.
+* Before working on how a page looks with `native:` / `desktop:` / `mobile:` utilities on Nasty, always `wf set-platform-preview desktop` or `wf set-platform-preview mobile` as appropriate (either mode also activates `native:`). Afterward, leave platform preview on or `wf set-platform-preview off` based on context (see Styling → platform variants).
+* Put native-bundle branding under project `icons/` (`icon.png`, `icon-256.png`, optional `icons/android/…`). Do not invent other branding folder names.
 
 ---
 
@@ -32,12 +34,14 @@ project/
  ├─ controllers/   # Controller classes (state + actions)
  ├─ pages/         # HTML files (edited in Webfoundry’s visual editor or directly)
  ├─ media/         # Project media (optional, add subdirs if desired)
+ ├─ icons/         # Optional native-bundle branding (icon.png, icon-256.png, android/…)
  └─ AGENTS.md      # This file
 ```
 
 * **controllers/**: one class per file, default export.
 * **pages/**: HTML entrypoints, can contain bindings (`wf-if`, `wf-map`, `wf-on*`, `{{...}}`).
 * **images/**: assets referenced from pages or controllers.
+* **icons/**: optional launcher / desktop branding for native export (`icon.png`, `icon-256.png`, `icon.ico` later, `android/` mipmaps). If missing, export falls back to Webfoundry `favicon.ico`.
 
 ---
 
@@ -139,6 +143,76 @@ Webfoundry templates support **declarative bindings**:
 * Google Fonts can be injected via `gfont-[Font_Name]` classes.
 * Use `wf-class` for dynamic class binding.
 
+### `native:` / `desktop:` / `mobile:` Tailwind variants
+
+Webfoundry registers composable Tailwind v4 variants named `native:`, `desktop:`, and `mobile:`. Prefix any utility with them (and compose with other variants as usual), for example `native:rounded-2xl`, `desktop:text-pink-500`, `mobile:lg:opacity-50`.
+
+Use **`native:`** for styles shared by all Nasty hosts. Use **`desktop:`** / **`mobile:`** only for host-specific overrides so you do not duplicate common native styles.
+
+**Precedence (same CSS property):** `desktop:` or `mobile:` (active host) beats `native:`, which beats bare utilities.
+
+**When they apply**
+
+* **Browser / IDE preview (default):** all three inert. The page looks like a normal web app.
+* **Browser with Desktop Preview on:** `native:` and `desktop:` apply; `mobile:` does not.
+* **Browser with Mobile Preview on:** `native:` and `mobile:` apply; `desktop:` does not.
+* **Exported Nasty / native bundle:** `native:` is always on. `desktop:` is on for desktop hosts; `mobile:` is on for Android.
+
+Do not rewrite class lists for preview. Authored markup keeps the tokens; the host decides whether they take effect.
+
+**Platform Preview buttons (IDE)**
+
+* Labels: **Desktop Preview** and **Mobile Preview**.
+* Placement: designer chrome, immediately to the left of the refresh control on the page toolbar (same cluster as refresh / clone / delete).
+* Visibility: the buttons appear when the open page’s DOM mirror has at least one class token containing `native:`, `desktop:`, or `mobile:`.
+* Behavior: toggles a global IDE preference (`platformPreview`: `off` | `desktop` | `mobile`). Active mode sets `wf-desktop-preview` or `wf-mobile-preview` on the live preview iframe’s `<html>` (mutually exclusive) and always sets `wf-native-preview` with either mode so `native:` utilities apply too. Attributes are runtime-only and are not saved into project HTML.
+
+**CLI (agents)**
+
+* `wf is-platform-preview` — prints `off`, `desktop`, or `mobile`.
+* `wf set-platform-preview off|desktop|mobile` — set platform preview (same preference as the toolbar buttons).
+
+**Agent workflow for platform looks**
+
+* Before editing or verifying native / Nasty styling, turn a platform preview on: `wf set-platform-preview desktop` (shared `native:` + desktop overrides) or `wf set-platform-preview mobile` (shared `native:` + mobile overrides). Check first with `wf is-platform-preview` if useful.
+* After that work, leave the matching preview on when the user is still reviewing it, or `wf set-platform-preview off` when returning to ordinary web layout work. Prefer restoring the prior mode when you flipped it only for a short pass.
+
+Example:
+
+```html
+<div class="rounded-none native:rounded-2xl text-white native:text-neutral-100 desktop:text-pink-500 mobile:text-sky-400">
+  …
+</div>
+```
+
+On the web with platform preview off, you get square corners and white text. With Desktop Preview on (or in a desktop Nasty export), corners round and text is pink. With Mobile Preview on (or on Android), corners round and text is sky.
+
+### Native export
+
+* Settings → **Export native app** builds a native bundle for the open project.
+* Targets: **linux-x64** and **android-arm64** (win-x64 later). Android is always listed; export fails clearly if the runtime APK is missing.
+* Linux: AppImage with project overlay. Android: debug-signed APK (sideload / `adb install`); re-sign with a release keystore for store builds; Play often wants AAB later.
+* Optional project `icons/` for branding; otherwise Webfoundry `favicon.ico` is used.
+* Android dialog shows **orientation** (`auto` | `portrait` | `landscape`) and hides desktop window chrome options.
+
+### Native apps only: `window` and bare globals
+
+These bindings exist **only in exported Nasty / native bundles**. They are not available in the ordinary browser IDE preview. Node ESM has no browser `window` scope; the native adapter injects live imports so the same unqualified names work as in the browser (`state`, `post`, `document`, `window`, …). Prefer bare names; `window.X = …` also updates those live bindings.
+
+**Always injected (shim / WF):** `window`, `document`, `state`, `post`, `d`, `rawctrls`, `showModal`, `selectFile`, `renderComponent`, `renderTemplate`, `wfeval`, `arrayify`, `tap`, `anime`, `triggerRouterError`, `localStorage`, `sessionStorage`, `location`, `history`, `fetch`, `navigator`, `rootPrefix`, `Node`, `Element`, `HTMLElement`, `Text`, `Comment`, `Document`, `Attr`, `MutationObserver`, `ResizeObserver`, and bare `addEventListener` / `removeEventListener` / `dispatchEvent` / `requestAnimationFrame` / `cancelAnimationFrame` (forwarded to the host window). Bare `scrollTo` is a no-op; bare `alert` throws `Not implemented`.
+
+**Host `window` (Nasty Window) — non-web extras apps may use:**
+
+* Geometry / chrome: `title`, `width`, `height`, `resizable`, `orientation`, `borderless`, `dragAnywhere`, `maximizable`, `maximized`, `vsync`, `closed`, `close()`
+* Paths: `appId`, `userDataPath`, `cachePath`
+* Pickers: `showDirectoryPicker(options?)`, `showOpenFilePicker(options?)`
+* Audio: `audioOutputs`, `audioOutput`
+* Timing / events: `requestAnimationFrame`, `cancelAnimationFrame`, `addEventListener`, `removeEventListener`, `dispatchEvent`, `drainEvents()`
+* DOM attachment: `document` (get/set), `navigator`, `Image`
+* Optional capture helpers: `captureFrame`, `copyFrame`
+
+Do **not** call frame presentation APIs (`present`, `presentDocument`, `presentWithImages`, `presentOrdered`, `presentTransformed`); Nasty presents attached documents itself. Build UI with standard DOM + Tailwind / `native:` / `desktop:` / `mobile:` classes.
+
 ---
 
 ## ⚡ Cross-Controller Usage
@@ -198,6 +272,8 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Comma
 * `wf set-input-value value --expr state.form.name`
 * `wf set-form-method --method post`
 * `wf toggle-hidden`
+* `wf is-platform-preview` – print `off` / `desktop` / `mobile` for IDE platform preview
+* `wf set-platform-preview off|desktop|mobile` – set platform preview (enable before working on `native:` / `desktop:` / `mobile:` looks; either on-mode also activates `native:`; restore or leave on based on context afterward)
 
 ### Logic & Events
 

@@ -9,6 +9,44 @@ let wforigin = new URL(location.href).searchParams.get('isolate') || location.or
 if (/^(\w+\.)?(webfoundry.app|webfoundry\d+\.netlify\.app|localhost)$/.test(wforigin)) throw new Error(`Bad isolation origin`);
 let post = data => parent.postMessage({ path: null, ...data, path: location.pathname.slice(1).split('/').slice(3).join('/') }, wforigin);
 let components = {};
+
+/** Ensure Tailwind sees native:/desktop:/mobile: even if the project's head.js is stale. */
+function ensurePlatformVariantStyles() {
+  if (document.querySelector('style.wf-platform-variants')) return;
+  let style = document.createElement('style');
+  style.type = 'text/tailwindcss';
+  style.className = 'wf-platform-variants';
+  style.textContent = [
+    '@custom-variant native (html:where([wf-native-preview]) &);',
+    '@custom-variant desktop (html[wf-desktop-preview] &);',
+    '@custom-variant mobile (html[wf-mobile-preview] &);',
+    '',
+  ].join('\n');
+  document.head.append(style);
+}
+
+/** Gate native:/desktop:/mobile: via html preview attributes. Parent posts (isolate is cross-origin). */
+function applyPlatformPreview(mode) {
+  ensurePlatformVariantStyles();
+  let root = document.documentElement;
+  root.removeAttribute('wf-desktop-preview');
+  root.removeAttribute('wf-mobile-preview');
+  root.removeAttribute('wf-native-preview');
+  if (mode === 'desktop') {
+    root.setAttribute('wf-desktop-preview', '');
+    root.setAttribute('wf-native-preview', '');
+  } else if (mode === 'mobile') {
+    root.setAttribute('wf-mobile-preview', '');
+    root.setAttribute('wf-native-preview', '');
+  }
+}
+
+function normalizePlatformPreview(value) {
+  if (value === 'desktop' || value === 'mobile') return value;
+  if (value === true || value === 'true') return 'desktop';
+  return 'off';
+}
+
 addEventListener('message', async ev => {
   let { type, ...rest } = ev.data;
   if (type !== 'state' || ev.origin !== wforigin) return;
@@ -21,7 +59,17 @@ addEventListener('message', async ev => {
     };
     state.collab.uid === 'master' ? scroll() : setTimeout(scroll, 500);
   }
+  if ('platformPreview' in rest) applyPlatformPreview(normalizePlatformPreview(rest.platformPreview));
+  else if ('nativePreview' in rest) applyPlatformPreview(rest.nativePreview ? 'desktop' : 'off');
   Object.assign(state, rest);
+});
+addEventListener('message', async ev => {
+  if (ev.data.type !== 'platformPreview' || ev.origin !== wforigin) return;
+  applyPlatformPreview(normalizePlatformPreview(ev.data.mode));
+});
+addEventListener('message', async ev => {
+  if (ev.data.type !== 'nativePreview' || ev.origin !== wforigin) return;
+  applyPlatformPreview(ev.data.enabled ? 'desktop' : 'off');
 });
 addEventListener('message', async ev => {
   if (ev.data.type !== 'update' || ev.origin !== wforigin) return;
@@ -97,6 +145,11 @@ let snap = () => {
   state.map = map;
   let doc = new DOMParser().parseFromString(snap, 'text/html');
   doc.querySelectorAll('.wf-cursor').forEach(x => x.remove());
+  // Runtime-only platform preview chrome — never persist into the authored page.
+  doc.documentElement.removeAttribute('wf-desktop-preview');
+  doc.documentElement.removeAttribute('wf-mobile-preview');
+  doc.documentElement.removeAttribute('wf-native-preview');
+  doc.querySelectorAll('style.wf-platform-variants, style.wf-native-variant').forEach(x => x.remove());
   for (let x of doc.querySelectorAll('[wf-component]')) {
     let props = x.getAttribute('wf-props') || '';
     if (props) props = ` wf-props="${props.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"`;

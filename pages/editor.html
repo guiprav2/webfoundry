@@ -1013,7 +1013,18 @@
               </div>
             </div>
 
-            <div class="flex gap-1">
+            <div class="flex gap-1 items-center">
+              <button
+                type="button"
+                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10"
+                title="Preview native:* Tailwind utilities"
+                wf-if="state.designer.hasNativeClasses"
+                wf-class="{{state.settings.opt.nativePreview &amp;&amp; 'bg-white/15'}}"
+                wf-onclick="event.preventDefault(), post('designer.toggleNativePreview')"
+                value=""
+              >
+                Native Preview
+              </button>
               <button
                 class="nf outline-none nf-md-refresh p-1.5"
                 wf-onclick="post('designer.toolbar', 'refresh')"

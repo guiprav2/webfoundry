@@ -82,6 +82,17 @@ export default class Designer {
       let ss = (this.current.cursors[state.collab.uid] || []).map(x => this.current.map.get(x));
       for (let s of ss) for (let cls of s.classList) { let match = cls.match(BG_COLOR_RE); if (match) return match[1] }
     },
+
+    // True when the htmlsnap mirror has any native:* class token — drives the
+    // Native Preview control visibility next to refresh.
+    get hasNativeClasses() {
+      let doc = this.current?.doc;
+      if (!doc) return false;
+      for (let el of doc.querySelectorAll('[class]')) {
+        for (let cls of el.classList) if (/(?:^|:)native:/.test(cls)) return true;
+      }
+      return false;
+    },
   };
 
   actions = {
@@ -133,6 +144,7 @@ export default class Designer {
             if (ev.data.status !== 200) return frame.reject(ev.data.error);
             frame.ready = true;
             frame.resolve();
+            await post('designer.applyNativePreview', frame);
             await post('designer.sync', frame);
             await post('files.reflect'); // For templates.
             break;
@@ -146,7 +158,9 @@ export default class Designer {
             }
             htmlsnap(frame.doc.documentElement, { idtrack: true, map: frame.map });
             state.collab.uid === 'master' && await post('designer.save', frame);
+            await post('designer.applyNativePreview', frame);
             await post('designer.sync', frame);
+            d.update();
             state.event.bus.emit('designer:htmlsnap:ready', { project, frame });
             break;
           }
@@ -348,6 +362,22 @@ export default class Designer {
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject });
       d.update();
       await loadman.run('designer.refresh', async () => { frame.el.src = frame.el.src; await p.promise });
+    },
+
+    // Gate Tailwind native:* in the live iframe via html[wf-native-preview].
+    // Authored class lists are never rewritten.
+    applyNativePreview: (frame = this.state.current) => {
+      let enabled = !!state.settings.opt.nativePreview;
+      let root = frame?.el?.contentDocument?.documentElement;
+      if (!root) return;
+      if (enabled) root.setAttribute('wf-native-preview', '');
+      else root.removeAttribute('wf-native-preview');
+    },
+
+    toggleNativePreview: async () => {
+      await post('settings.option', 'nativePreview');
+      await post('designer.applyNativePreview');
+      d.update();
     },
   };
 };

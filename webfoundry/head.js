@@ -47,6 +47,15 @@ observer.observe(document, { attributes: true, childList: true, subtree: true })
     document.head.append(link);
   }
   if (cfg.tailwind) {
+    // native:* utilities apply only when html carries wf-native-preview
+    // (IDE Native Preview toggle, or any host that sets the attribute).
+    // On Nasty the JS resolver treats native: as always-on instead.
+    let nativeVariant = document.createElement('style');
+    nativeVariant.type = 'text/tailwindcss';
+    nativeVariant.className = 'wf-native-variant';
+    nativeVariant.textContent = '@custom-variant native (&:where(html[wf-native-preview] *));\n';
+    document.head.append(nativeVariant);
+
     let script = document.createElement('script');
     script.className = 'wf-tw-script';
     script.src = `${prefix}webfoundry/tailplay4.dafuq.js`;

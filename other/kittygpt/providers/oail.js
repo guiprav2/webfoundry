@@ -1,5 +1,9 @@
 // providers/oail.js
+import { openaiError } from './errors.js';
+
 let provider = {
+  name: 'OpenAI',
+  parseError: openaiError,
   endpoint: 'https://api.openai.com/v1/chat/completions',
   modelsEndpoint: 'https://api.openai.com/v1/models',
   get key() { return globalThis.process?.env?.OPENAI_API_KEY; },

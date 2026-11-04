@@ -234,6 +234,11 @@ class App {
         return;
       }
       if (href.startsWith('#') && href.length > 1) {
+        ev.preventDefault();
+        if (location.hash !== href) {
+          this.origPushState.call(history, history.state, '', href);
+        }
+        this.scrollToHash(href);
         return;
       }
       ev.preventDefault();
@@ -245,15 +250,41 @@ class App {
 
   pushPopStateSetup() {
     let self = this;
-    let origPushState = history.pushState;
+    let origPushState = (this.origPushState = history.pushState);
     history.pushState = function (...args) {
       origPushState.call(this, ...args);
       self.update();
     };
-    addEventListener('popstate', () => self.update());
+    addEventListener('popstate', () => {
+      // Hash-only navigation (back/forward between #anchors): keep the page, just scroll.
+      if (self.renderedKey === self.routeKey()) {
+        self.scrollToHash(location.hash);
+        return;
+      }
+      self.update();
+    });
+  }
+
+  routeKey() {
+    return location.pathname + location.search;
+  }
+
+  scrollToHash(hash, behavior = 'smooth') {
+    if (!hash || hash === '#') return false;
+    let id;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      id = hash.slice(1);
+    }
+    let el = document.getElementById(id);
+    if (!el?.scrollIntoView) return false;
+    el.scrollIntoView({ behavior, block: 'start' });
+    return true;
   }
 
   update() {
+    this.renderedKey = this.routeKey();
     let url = new URL(location.href);
     if (!this.electronRoot) {
       this.electronRoot = url.searchParams.get('electronRoot');
@@ -294,6 +325,10 @@ class App {
     }
     scrollTo(0, 0);
     d.update();
+    if (url.hash) {
+      // Wait for the freshly rendered page to be in the DOM before scrolling.
+      requestAnimationFrame(() => this.scrollToHash(url.hash));
+    }
   }
 
   render = () => d.portal(() => this.content);

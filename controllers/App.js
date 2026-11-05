@@ -43,7 +43,6 @@ export default class App {
       }
       await post('shell.init');
       await post('files.init');
-      !collab && await post('files.handleGitImportQuery');
       await post('codeEditor.init');
       await post('styles.init');
       await post('designer.init');
@@ -52,6 +51,8 @@ export default class App {
       (!this.state.demo && state.collab.uid === 'master' && !this.state.panel) && await post('app.selectPanel', 'projects');
       state.event.bus.on('designer:togglePreview:ready', async ({ preview }) => preview && this.state.panel === 'styles' && await post('app.selectPanel', null));
       state.event.bus.on('files:select:ready', async ({ path }) => this.state.mobile && path && await post('app.selectPanel', null));
+      // Must run after designer.init so Designer is listening when the imported project's index.html gets auto-selected.
+      !collab && await post('files.handleGitImportQuery');
     },
 
     selectPanel: x => {

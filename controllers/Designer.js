@@ -25,6 +25,14 @@ let parseShadeArgs = (args, fallbackCur) => {
   return { cur: args[0] ?? fallbackCur, shade: args[1] };
 };
 
+function runSave(frame, project) {
+  frame.saveDebounce = null;
+  frame.saveFirstPendingAt = null;
+  frame.saveChain = (frame.saveChain || Promise.resolve())
+    .then(() => post('designer.saveNow', frame, project))
+    .catch(err => console.error('Designer save failed:', err));
+}
+
 export default class Designer {
   state = {
     toolbar: 'manipulation',
@@ -171,6 +179,8 @@ export default class Designer {
         }
       });
       addEventListener(state.app.mobile ? 'input' : 'keydown', async ev => await post('designer.keydown', ev), true);
+      // Catch up on a file selected before our files:select:ready listener existed.
+      if (state.files.current?.endsWith?.('.html')) post('designer.select', state.files.current);
     },
 
     select: async path => {
@@ -327,8 +337,26 @@ export default class Designer {
       ++frame.ihistory[cur];
     },
 
-    save: debounce(async frame => {
+    // Debounced per frame (a shared debounce let any other open, constantly-mutating
+    // page starve this one's saves), with a max wait so a page that keeps mutating
+    // still gets flushed. Saves are chained per frame so they land in order.
+    save: frame => {
+      clearTimeout(frame.saveDebounce);
       let project = state.projects.current;
+      let now = Date.now();
+      frame.saveFirstPendingAt ??= now;
+      let delay = Math.max(0, Math.min(200, frame.saveFirstPendingAt + 1000 - now));
+      frame.saveDebounce = setTimeout(() => runSave(frame, project), delay);
+    },
+
+    // Run any pending save now and wait for in-flight ones (and the templates.json reflect) to land.
+    flushSave: async (frame = this.state.current) => {
+      if (!frame) return;
+      if (frame.saveDebounce) { clearTimeout(frame.saveDebounce); runSave(frame, state.projects.current) }
+      await frame.saveChain;
+    },
+
+    saveNow: async (frame, project = state.projects.current) => {
       let body = frame.body.cloneNode(true);
       body.querySelectorAll('.wf-cursor').forEach(x => x.remove());
       body.querySelectorAll('*').forEach(x => x.removeAttribute('data-htmlsnap'));
@@ -342,13 +370,16 @@ export default class Designer {
       frame.saveTimeout = setTimeout(() => frame.saveTimeout = null, 5000);
       await rfiles.save(project, frame.path, new Blob([html], { type: 'text/html' }));
       let phtml = (await prettier(html, { parser: 'html' })).replace(/\{\{[\s\S]*?\}\}/g, m => m .replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').replace(/\{\{\s*/g, '{{').replace(/\s*\}\}/g, '}}'));
-      if (phtml === html) return state.event.bus.emit('designer:save:ready', { project, path: frame.path });
-      await rfiles.save(project, frame.path, new Blob([phtml], { type: 'text/html' }));
+      if (phtml !== html) await rfiles.save(project, frame.path, new Blob([phtml], { type: 'text/html' }));
+      // Preview renders from webfoundry/templates.json. For local projects nothing else
+      // rebuilds it after our own save (BroadcastChannel never echoes to the sender tab).
+      if (state.projects.current === project) await post('files.reflect');
       state.event.bus.emit('designer:save:ready', { project, path: frame.path });
-    }, 200),
+    },
 
     togglePreview: async () => {
       let frame = this.state.current;
+      await post('designer.flushSave', frame);
       let p = Promise.withResolvers();
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject, preview: !frame.preview });
       d.update();
@@ -364,6 +395,7 @@ export default class Designer {
 
     refresh: async () => {
       let frame = this.state.current;
+      await post('designer.flushSave', frame);
       let p = Promise.withResolvers();
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject });
       d.update();

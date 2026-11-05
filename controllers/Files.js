@@ -12,12 +12,15 @@ import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 import { downloadBlob, exportAndroidApk, exportLinuxAppImage } from '../nasty/export-native.js';
 
+let loadChain = Promise.resolve();
+
 export default class Files {
   state = {
     list: [],
     expandedPaths: new Set(),
     gitImportQueryHandled: false,
     autoSelectOnLoad: null,
+    importing: 0,
 
     expanded: path => {
       if (!path) return true;
@@ -82,7 +85,8 @@ export default class Files {
         this.state.list = [];
         this.state.expandedPaths = new Set(['pages/']);
         this.state.current = null;
-        this.state.autoSelectOnLoad = project ? 'pages/index.html' : null;
+        // During Git imports, auto-select is deferred until the import finishes (see runGitImportFlow).
+        this.state.autoSelectOnLoad = project && !this.state.importing ? 'pages/index.html' : null;
         d.update();
         if (project) {
           await post('files.load');
@@ -152,7 +156,7 @@ export default class Files {
       });
     },
 
-    load: debounce(async () => await loadman.run('files.load', async () => {
+    load: debounce(async () => await (loadChain = loadChain.catch(() => {}).then(() => loadman.run('files.load', async () => {
       let project = state.projects.current;
       let { bus } = state.event;
       bus.emit('files:load:start');
@@ -161,7 +165,7 @@ export default class Files {
       if (!list.includes(this.state.current)) await post('files.select', null);
       this.state.list = structuredFiles(list);
       bus.emit('files:load:ready');
-    }), 500),
+    }))), 500),
 
     select: async path => {
       if (state.collab.uid !== 'master') return;
@@ -555,19 +559,24 @@ export default class Files {
           continue;
         }
         let project;
+        this.state.importing++;
         try {
-          project = await post('projects.create', projectName);
-        } catch (err) {
-          console.error(err);
-          await showModal('InfoDialog', { title: `Failed to create project: ${err.message}` });
-          return;
-        }
-        if (!project) project = state.projects.list.find(x => x.startsWith(`${projectName}:`));
-        try {
-          await runGitImportFlow(project, repoUrl, branch);
-        } catch (err) {
-          console.error(err);
-          await showModal('InfoDialog', { title: `Git import failed: ${err.message}` });
+          try {
+            project = await post('projects.create', projectName);
+          } catch (err) {
+            console.error(err);
+            await showModal('InfoDialog', { title: `Failed to create project: ${err.message}` });
+            return;
+          }
+          if (!project) project = state.projects.list.find(x => x.startsWith(`${projectName}:`));
+          try {
+            await runGitImportFlow(project, repoUrl, branch);
+          } catch (err) {
+            console.error(err);
+            await showModal('InfoDialog', { title: `Git import failed: ${err.message}` });
+          }
+        } finally {
+          this.state.importing--;
         }
         return;
       }
@@ -685,15 +694,20 @@ async function persistGitFiles(project, pfs, currentDir, prefix) {
 
 async function runGitImportFlow(project, repoUrl, branch) {
   showModal('LoadingDialog', { msg: `Importing ${branch}...` });
+  state.files.importing++;
   try {
     await importGitRepository(project, repoUrl, branch);
-    //await post('files.injectBuiltins');
-    //await post('files.reflect');
-    //await post('files.load');
+    if (state.projects.current === project) {
+      // Close whatever was open (it may be stale now), then open pages/index.html once the refreshed list is in.
+      await post('files.select', null);
+      await post('designer.reset');
+      state.files.autoSelectOnLoad = 'pages/index.html';
+    }
+    await post('files.reflect');
+    await post('files.load');
+  } finally {
+    state.files.importing--;
     document.querySelector('dialog')?.remove?.();
-  } catch (err) {
-    document.querySelector('dialog')?.remove?.();
-    throw err;
   }
 }
 

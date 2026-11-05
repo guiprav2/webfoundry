@@ -1,7 +1,9 @@
 import { run } from '../other/kittygpt/core.js';
 import { keyImageData, parseKeyColor } from '../other/keypng.js';
+import { ensureOpenAIKey } from '../other/openai.js';
 import { createShell, formatResult } from '../other/shell.js';
 import { projectFs } from '../other/shellfs.js';
+import { ensureXAIKey } from '../other/xai.js';
 import rfiles from '../repos/rfiles.js';
 
 let instructions = [
@@ -112,10 +114,10 @@ export default class Agent {
       this.stick();
       this.logs.push({ type: 'message', role: 'user', content: [text] });
       try {
-        let key = localStorage.getItem('webfoundry:xaiApiKey');
-        if (!key) throw new Error(`xAI API Key required`);
+        let xai = state.settings.opt?.codingAgent === 'xai';
+        let key = xai ? await ensureXAIKey() : await ensureOpenAIKey();
         await run(this.logs, {
-          model: 'xai:grok-4.7',
+          model: xai ? 'xai:grok-4.5' : 'oai:gpt-6-luna',
           key,
           stream: true,
           instructions,

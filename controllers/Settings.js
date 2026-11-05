@@ -2,9 +2,10 @@ import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
 import rprojects from '../repos/rprojects.js';
 import { getOpenAIKey, promptForOpenAIKey } from '../other/openai.js';
+import { getXAIKey, promptForXAIKey } from '../other/xai.js';
 
 export default class Settings {
-  state = { hasOpenAIKey: false };
+  state = { hasOpenAIKey: false, hasXAIKey: false };
 
   actions = {
     init: async () => {
@@ -12,6 +13,11 @@ export default class Settings {
       this.state.hasOpenAIKey = !!getOpenAIKey();
       bus.on('settings:openaiKey:changed', ({ hasKey }) => {
         this.state.hasOpenAIKey = hasKey;
+        d.update();
+      });
+      this.state.hasXAIKey = !!getXAIKey();
+      bus.on('settings:xaiKey:changed', ({ hasKey }) => {
+        this.state.hasXAIKey = hasKey;
         d.update();
       });
       this.state.opt = JSON.parse(localStorage.getItem('webfoundry:config') || 'null');
@@ -62,6 +68,10 @@ export default class Settings {
 
     setOpenAIKey: async () => {
       await promptForOpenAIKey();
+    },
+
+    setXAIKey: async () => {
+      await promptForXAIKey();
     },
 
     fetchProjectTitle: async () => {

@@ -5,6 +5,11 @@ let editorOrigin = `${location.origin}/`;
 
 let templates = [
   {
+    id: 'counter',
+    label: 'Counter',
+    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/counter.git`,
+  },
+  {
     id: 'todomvc',
     label: 'TodoMVC',
     href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/todomvc.git`,
@@ -15,7 +20,7 @@ let templates = [
     href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry.git`,
   },
 ];
-let defaultTemplate = templates.find(x => x.id === 'todomvc');
+let defaultTemplate = templates.find(x => x.id === 'counter');
 
 export default class Landing {
   state = {

@@ -23,7 +23,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * When special editing DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting `flex justify-center items-center` on a container).
 * Event handler attributes are always e.g. wf-onclick="post('ctrl.action')". Not wf-on-click="...", not data-onclick="...", not even native onclick="...".
 * wf-\* attributes only apply where their native equivalents apply. E.g. wf-value is only valid for \<input>, \<textarea>, etc.
-* Before working on how a page looks with `native:` / `desktop:` / `mobile:` / OS (`win:` / `nux:` / `mac:` / `android:`) utilities on Nasty, always `wf set-platform-preview desktop` or `wf set-platform-preview mobile` as appropriate (either mode also activates `native:`), plus `wf set-platform-os <os>` for OS-specific looks. Afterward, leave platform preview on or `wf set-platform-preview off` based on context (see Styling → platform variants).
+* Before working on how a page looks with `native:` / `desktop:` / `mobile:` / OS (`win:` / `lin:` / `mac:` / `android:`) utilities on Nasty, always `wf set-platform-preview desktop` or `wf set-platform-preview mobile` as appropriate (either mode also activates `native:`), plus `wf set-platform-os <os>` for OS-specific looks. Afterward, leave platform preview on or `wf set-platform-preview off` based on context (see Styling → platform variants).
 * Put native-bundle branding under project `icons/` (`icon.png`, `icon-256.png`, optional `icons/android/…`). Do not invent other branding folder names.
 
 ---
@@ -150,9 +150,9 @@ Webfoundry registers composable Tailwind v4 variants named `native:`, `desktop:`
 
 Use **`native:`** for styles shared by all Nasty hosts. Use **`desktop:`** / **`mobile:`** only for host-specific overrides so you do not duplicate common native styles.
 
-OS variants **`win:`** (Windows), **`nux:`** (Linux), **`mac:`** (macOS), and **`android:`** narrow a style to one OS, e.g. `nux:adw-header-bar`, `android:rounded-none`. The OS is independent of the form factor, so stack them for combinations: `nux:mobile:hidden` (Linux phone), `nux:desktop:flex` (Linux desktop). Android is `android:`, never `nux:`.
+OS variants **`win:`** (Windows), **`lin:`** (Linux), **`mac:`** (macOS), and **`android:`** narrow a style to one OS, e.g. `lin:adw-header-bar`, `android:rounded-none`. The OS is independent of the form factor, so stack them for combinations: `lin:mobile:hidden` (Linux phone), `lin:desktop:flex` (Linux desktop). Android is `android:`, never `lin:`.
 
-**Precedence (same CSS property):** `win:` / `nux:` / `mac:` / `android:` (active OS) beats `desktop:` or `mobile:` (active host), which beats `native:`, which beats bare utilities. Stacked variants (`nux:mobile:…`) beat single ones.
+**Precedence (same CSS property):** `win:` / `lin:` / `mac:` / `android:` (active OS) beats `desktop:` or `mobile:` (active host), which beats `native:`, which beats bare utilities. Stacked variants (`lin:mobile:…`) beat single ones.
 
 **When they apply**
 
@@ -160,7 +160,7 @@ OS variants **`win:`** (Windows), **`nux:`** (Linux), **`mac:`** (macOS), and **
 * **Browser with Desktop Preview on:** `native:` and `desktop:` apply; `mobile:` does not.
 * **Browser with Mobile Preview on:** `native:` and `mobile:` apply; `desktop:` does not.
 * **Browser with an OS selected (Windows / Linux / Android):** `native:`, the selected Desktop or Mobile mode, and that OS's variant apply.
-* **Exported Nasty / native bundle:** `native:` is always on. `desktop:` is on for desktop hosts; `mobile:` is on for Android. `win:` / `nux:` / `mac:` / `android:` follow the OS.
+* **Exported Nasty / native bundle:** `native:` is always on. `desktop:` is on for desktop hosts; `mobile:` is on for Android. `win:` / `lin:` / `mac:` / `android:` follow the OS.
 
 Do not rewrite class lists for preview. Authored markup keeps the tokens; the host decides whether they take effect.
 
@@ -168,15 +168,15 @@ Do not rewrite class lists for preview. Authored markup keeps the tokens; the ho
 
 * A platform radiogroup of icons (**Web**, **Windows**, **Linux**, **Android**) followed by the **Desktop Preview** and **Mobile Preview** toggles.
 * Placement: designer chrome, immediately to the left of the refresh control on the page toolbar (same cluster as refresh / clone / delete).
-* Visibility: the controls appear when the open page’s DOM mirror has at least one class token containing `native:`, `desktop:`, `mobile:`, `win:`, `nux:`, `mac:`, or `android:`.
-* Behavior: two global IDE preferences. `platformOs` (`web` | `win` | `nux` | `mac` | `android`, the radiogroup) and `platformPreview` (`off` | `desktop` | `mobile`, the toggles). Web is the plain browser: selecting it turns Desktop/Mobile off. Selecting an OS turns on Desktop (Mobile for Android) if neither is on; turning Desktop/Mobile off returns to Web. Desktop/Mobile with Web selected is the generic native preview (no OS). Active modes set `wf-native-preview`, `wf-desktop-preview` or `wf-mobile-preview`, and `wf-<os>-preview` on the live preview iframe’s `<html>`. Attributes are runtime-only and are not saved into project HTML.
+* Visibility: the controls appear when the open page’s DOM mirror has at least one class token containing `native:`, `desktop:`, `mobile:`, `win:`, `lin:`, `mac:`, or `android:`.
+* Behavior: two global IDE preferences. `platformOs` (`web` | `win` | `lin` | `mac` | `android`, the radiogroup) and `platformPreview` (`off` | `desktop` | `mobile`, the toggles). Web is the plain browser: selecting it turns Desktop/Mobile off. Selecting an OS turns on Desktop (Mobile for Android) if neither is on; turning Desktop/Mobile off returns to Web. Desktop/Mobile with Web selected is the generic native preview (no OS). Active modes set `wf-native-preview`, `wf-desktop-preview` or `wf-mobile-preview`, and `wf-<os>-preview` on the live preview iframe’s `<html>`. Attributes are runtime-only and are not saved into project HTML.
 
 **CLI (agents)**
 
 * `wf is-platform-preview` — prints `off`, `desktop`, or `mobile`.
 * `wf set-platform-preview off|desktop|mobile` — set the form factor (same preference as the Desktop/Mobile toggles).
-* `wf is-platform-os` — prints `web`, `win`, `nux`, `mac`, or `android`.
-* `wf set-platform-os web|win|nux|mac|android` — set the OS (same preference as the platform radiogroup).
+* `wf is-platform-os` — prints `web`, `win`, `lin`, `mac`, or `android`.
+* `wf set-platform-os web|win|lin|mac|android` — set the OS (same preference as the platform radiogroup).
 
 **Agent workflow for platform looks**
 
@@ -195,14 +195,21 @@ On the web with platform preview off, you get square corners and white text. Wit
 
 ### Adwaita `adw-*` classes
 
-Webfoundry ships the GNOME Adwaita styles from adwaita-web as `adw-*` utility classes (every upstream class is `adw-` prefixed: `adw-button`, `adw-card`, `adw-suggested-action`, `adw-title-1`, `adw-boxed-list`, …). They are Tailwind utilities, so any variant composes: `md:adw-card`, `mobile:adw-button`, `nux:adw-headerbar`, `hover:adw-dimmed`.
+Webfoundry ships the GNOME Adwaita styles from adwaita-web as `adw-*` utility classes (every upstream class is `adw-` prefixed: `adw-button`, `adw-card`, `adw-suggested-action`, `adw-title-1`, `adw-boxed-list`, …). They are Tailwind utilities, so any variant composes: `md:adw-card`, `mobile:adw-button`, `lin:adw-headerbar`, `hover:adw-dimmed`.
 
 * Combine component classes with their modifiers exactly like upstream: `<button class="adw-button adw-suggested-action">`, `<button class="adw-button adw-flat adw-circular">`. Child rules (e.g. `.adw-icon` inside `.adw-button`) follow from the markup.
-* Platform-scoped: prefix only the component classes (`nux:adw-button adw-suggested-action`). Modifier/marker classes (`adw-suggested-action`, `adw-flat`, `adw-circular`, `adw-pill`, `adw-header-bar-title`, …) have no styles of their own and only act where the component class is active, so leave them unprefixed.
+* Platform-scoped: prefix only the component classes (`lin:adw-button adw-suggested-action`). Modifier/marker classes (`adw-suggested-action`, `adw-flat`, `adw-circular`, `adw-pill`, `adw-header-bar-title`, …) have no styles of their own and only act where the component class is active, so leave them unprefixed.
 * Page base: `adw-page` (upstream `body` rule: font, spacing), `adw-background` (window background and text color); element styles as `adw-h1`…`adw-h6`, `adw-p`, `adw-a`, `adw-hr`, `adw-all` (the `*` reset).
 * Themes: add `adw-theme-dark` to `<html>` (on Nasty: to `<body>`) for the dark theme; accents via `adw-accent-blue|teal|green|yellow|orange|red|pink|purple|slate` on `<html>` (web only).
 * Symbolic icons: `adw-icon-<name>-symbolic` (e.g. `adw-icon-go-next-symbolic`), drawn with `background-color: currentColor` through a mask; size them with the element (e.g. `size-4 inline-block`). Web only.
 * Nasty supports the subset Nasty can express: base styles, `hover:`/`active:`, class/attribute/structural modifiers, descendant/child rules, `max-md`, and dark. Focus rings, `:not()`, pseudo-elements, masks/icons, accents and vendor properties are web-only.
+
+### Material `and-*` classes (Android)
+
+Webfoundry also ships Material Design 3 (from Beer CSS) as `and-*` utilities. Beer styles elements, so every element becomes a class: `and-button`, `and-header`, `and-h1`…`and-h6`, `and-body` (page base: surface background, on-surface text, Material font), plus helpers such as `and-border` (outlined), `and-secondary-container` (tonal), `and-primary-text`, `and-surface`, `and-large`/`and-small`/`and-extra` (sizes), `and-circle`, `and-round`. Dark theme: `and-dark` on `<body>`.
+
+* Scope to Android with `android:` (combine with `mobile:` / `desktop:` as needed): `<button class="android:and-button android:and-border">`.
+* Material modifiers usually have styles of their own, so prefix them too (`android:and-border`, `android:and-large`). A platform-prefixed modifier still counts for compound rules (`and-button` + `and-border`) when its variant is active. This works for `adw-*` markers as well (`lin:adw-flat`).
 
 ### Native export
 
@@ -210,6 +217,7 @@ Webfoundry ships the GNOME Adwaita styles from adwaita-web as `adw-*` utility cl
 * Targets: **linux-x64** and **android-arm64** (win-x64 later). Android is always listed; export fails clearly if the runtime APK is missing.
 * Linux: AppImage with project overlay. Android: debug-signed APK (sideload / `adb install`); re-sign with a release keystore for store builds; Play often wants AAB later.
 * Optional project `icons/` for branding; otherwise Webfoundry `favicon.ico` is used.
+* **Theme** pills (one at a time, click again to clear), per target: **Use Adwaita** (`lin:adw-*`), **Use Kendo UI** (`win:win-*`), **Use Beer** (`android:and-*`) force that platform's variant on any build — e.g. Kendo UI on a Linux build; **Use system theme** follows the device OS; none renders like the web preview (`native:` / `desktop:` / `mobile:` only).
 * Android dialog shows **orientation** (`auto` | `portrait` | `landscape`) and hides desktop window chrome options.
 
 ### Native apps only: `window` and bare globals
@@ -355,7 +363,7 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Comma
 * `wf toggle-hidden`
 * `wf is-platform-preview` – print `off` / `desktop` / `mobile` for IDE platform preview
 * `wf set-platform-preview off|desktop|mobile` – set platform preview form factor (enable before working on `native:` / `desktop:` / `mobile:` looks; either on-mode also activates `native:`; restore or leave on based on context afterward)
-* `wf is-platform-os` / `wf set-platform-os web|win|nux|mac|android` – read/set the previewed OS for `win:` / `nux:` / `mac:` / `android:` looks
+* `wf is-platform-os` / `wf set-platform-os web|win|lin|mac|android` – read/set the previewed OS for `win:` / `lin:` / `mac:` / `android:` looks
 * `wf is-page-preview` – print the open page's mode: `preview` (the page runs live, as users see it) or `edit` (visual editor)
 * `wf set-page-preview preview|edit|toggle` – switch the open page between preview and edit modes (same as the editor's Preview button)
 

@@ -12,9 +12,9 @@ let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emera
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
 let TEXT_COLOR_RE = new RegExp(`^text-(${TAILWIND_HUES.join('|')})-(${TAILWIND_SHADES.join('|')})$`);
 let BG_COLOR_RE = new RegExp(`^bg-(${TAILWIND_HUES.join('|')})-(${TAILWIND_SHADES.join('|')})$`);
-// Platform Preview = form factor (off | desktop | mobile) × OS (web | win | nux | mac | android).
-let PLATFORM_OSES = ['win', 'nux', 'mac', 'android'];
-// Variants are conditions on the element itself so they stack (nux:mobile:…);
+// Platform Preview = form factor (off | desktop | mobile) × OS (web | win | lin | mac | android).
+let PLATFORM_OSES = ['win', 'lin', 'mac', 'android'];
+// Variants are conditions on the element itself so they stack (lin:mobile:…);
 // :is() keeps specificity: OS > desktop|mobile > native > bare.
 let PLATFORM_VARIANTS_CSS = [
   '@custom-variant native (&:is(html:where([wf-native-preview]) *));',
@@ -23,16 +23,19 @@ let PLATFORM_VARIANTS_CSS = [
   ...PLATFORM_OSES.map(os => `@custom-variant ${os} (&:is(html[wf-${os}-preview] *));`),
   '',
 ].join('\n');
-// Earlier builds stored desktop OSes in platformPreview itself (win/nux/mac ⇒ desktop).
+// Earlier builds stored desktop OSes in platformPreview itself (win/lin/mac ⇒ desktop),
+// and called Linux `nux`.
+let legacyOs = os => (os === 'nux' ? 'lin' : os);
 let platformForm = () => {
-  let mode = state.settings.opt.platformPreview;
+  let mode = legacyOs(state.settings.opt.platformPreview);
   if (mode === 'desktop' || mode === 'mobile') return mode;
   return PLATFORM_OSES.includes(mode) ? 'desktop' : 'off';
 };
 let platformOs = () => {
-  let os = state.settings.opt.platformOs;
+  let os = legacyOs(state.settings.opt.platformOs);
   if (PLATFORM_OSES.includes(os)) return os;
-  return PLATFORM_OSES.includes(state.settings.opt.platformPreview) ? state.settings.opt.platformPreview : 'web';
+  let mode = legacyOs(state.settings.opt.platformPreview);
+  return PLATFORM_OSES.includes(mode) ? mode : 'web';
 };
 
 let parseHueArgs = (args, fallbackCur) => {
@@ -116,7 +119,7 @@ export default class Designer {
       for (let s of ss) for (let cls of s.classList) { let match = cls.match(BG_COLOR_RE); if (match) return match[1] }
     },
 
-    // True when the htmlsnap mirror has native:*, desktop:*, mobile:*, or OS (win/nux/mac/android) variants —
+    // True when the htmlsnap mirror has native:*, desktop:*, mobile:*, or OS (win/lin/mac/android) variants —
     // drives the platform radiogroup and Desktop/Mobile Preview controls next to refresh.
     // Normalized Platform Preview for toolbar bindings (legacy values folded in).
     get platformOs() { return platformOs() },
@@ -127,7 +130,7 @@ export default class Designer {
       if (!doc) return false;
       for (let el of doc.querySelectorAll('[class]')) {
         for (let cls of el.classList) {
-          if (/(?:^|:)(?:native|desktop|mobile|win|nux|mac|android):/.test(cls)) return true;
+          if (/(?:^|:)(?:native|desktop|mobile|win|lin|mac|android):/.test(cls)) return true;
         }
       }
       return false;
@@ -487,6 +490,24 @@ if (!s) {
   document.head.append(s);
 }
 if (s.textContent !== args.variants) s.textContent = args.variants;
+// Theme utilities (adw-*, and-*): projects created before them have a head.js
+// that never loads them; fetch through the project (the IDE serves missing files).
+// Appended once with content (no empty placeholder → one Tailwind recompile each);
+// window.wfThemeLoads is shared with head.js so neither loads a theme twice.
+let loads = (window.wfThemeLoads ??= new Map());
+for (let [key, name] of Object.entries(args.themes)) {
+  if (loads.has(name) || document.querySelector('style.wf-' + name)) continue;
+  if (!document.querySelector('[class*="' + key + '-"]')) continue;
+  let base = (location.pathname.startsWith('/files/') ? '../' : '') + 'webfoundry/';
+  loads.set(name, fetch(base + name + '.tw.css').then(r => (r.ok ? r.text() : '')).then(css => {
+    if (!css || document.querySelector('style.wf-' + name)) return;
+    let t = document.createElement('style');
+    t.type = 'text/tailwindcss';
+    t.className = 'wf-' + name;
+    t.textContent = css;
+    document.head.append(t);
+  }).catch(() => {}));
+}
 let root = document.documentElement;
 for (let x of ['desktop', 'mobile', 'native', ...args.oses]) root.removeAttribute('wf-' + x + '-preview');
 if (args.mode !== 'off') {
@@ -494,13 +515,13 @@ if (args.mode !== 'off') {
   root.setAttribute('wf-' + args.mode + '-preview', '');
   if (args.oses.includes(args.os)) root.setAttribute('wf-' + args.os + '-preview', '');
 }`;
-      win.postMessage({ type: 'eval', fn, rpcid: crypto.randomUUID(), args: { mode, os, oses: PLATFORM_OSES, variants: PLATFORM_VARIANTS_CSS } }, origin);
+      win.postMessage({ type: 'eval', fn, rpcid: crypto.randomUUID(), args: { mode, os, oses: PLATFORM_OSES, variants: PLATFORM_VARIANTS_CSS, themes: { adw: 'adwaita', and: 'material', win: 'fluent' } } }, origin);
       win.postMessage({ type: 'platformPreview', mode, os }, origin);
     },
 
     // Form factor: off | desktop | mobile. Turning it off returns to plain Web.
     setPlatformPreview: async (mode) => {
-      if (PLATFORM_OSES.includes(mode)) return await post('designer.setPlatformOs', mode); // legacy OS-as-mode
+      if (PLATFORM_OSES.includes(legacyOs(mode))) return await post('designer.setPlatformOs', mode); // legacy OS-as-mode
       if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
         throw new Error('platform preview mode must be desktop, mobile, or off');
       }
@@ -510,11 +531,12 @@ if (args.mode !== 'off') {
       d.update();
     },
 
-    // OS radiogroup: web | win | nux | mac | android. Web is the plain browser (no
+    // OS radiogroup: web | win | lin | mac | android. Web is the plain browser (no
     // platform variants); an OS needs a form factor, defaulting to mobile on Android.
     setPlatformOs: async (os) => {
+      os = legacyOs(os);
       if (os !== 'web' && !PLATFORM_OSES.includes(os)) {
-        throw new Error('platform OS must be web, win, nux, mac, or android');
+        throw new Error('platform OS must be web, win, lin, mac, or android');
       }
       await post('settings.option', 'platformOs', os);
       if (os === 'web') await post('settings.option', 'platformPreview', 'off');

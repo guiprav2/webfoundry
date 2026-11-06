@@ -13,7 +13,7 @@ import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 import { downloadBlob, exportAndroidApk, exportLinuxAppImage } from '../nasty/export-native.js';
 
 // Runtime files projects created before adw-* support may lack (served from the IDE instead).
-let ADWAITA_RUNTIME_FILES = ['webfoundry/adwaita.tw.css', 'webfoundry/adwaita-icons.css'];
+let ADWAITA_RUNTIME_FILES = ['webfoundry/adwaita.tw.css', 'webfoundry/adwaita-icons.css', 'webfoundry/material.tw.css', 'webfoundry/fluent.tw.css'];
 
 let loadChain = Promise.resolve();
 
@@ -617,7 +617,7 @@ export default class Files {
             name,
             orientation: windowOpts.orientation,
             documentClassNames: windowOpts.documentClassNames,
-            systemTheme: windowOpts.systemTheme,
+            theme: windowOpts.theme ?? (windowOpts.systemTheme ? 'system' : 'none'),
           });
           filename = `${name}.apk`;
         } else {
@@ -631,7 +631,7 @@ export default class Files {
             dragAnywhere: windowOpts.dragAnywhere,
             resizable: windowOpts.resizable,
             documentClassNames: windowOpts.documentClassNames,
-            systemTheme: windowOpts.systemTheme,
+            theme: windowOpts.theme ?? (windowOpts.systemTheme ? 'system' : 'none'),
           });
           filename = `${name}-x86_64.AppImage`;
         }

@@ -58,7 +58,7 @@ function helpText() {
   lines.push('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
   lines.push('  wf set-platform-preview desktop');
   lines.push('  wf is-platform-preview');
-  lines.push('  wf set-platform-os nux');
+  lines.push('  wf set-platform-os lin');
   lines.push('  wf set-page-preview toggle');
   lines.push('  wf is-page-preview');
   return lines.map(line => line + '\n').join('');
@@ -265,7 +265,7 @@ let subcommands = {
     },
   },
   'is-platform-os': {
-    description: 'Print IDE platform preview OS (web, win, nux, mac, or android).',
+    description: 'Print IDE platform preview OS (web, win, lin, mac, or android).',
     build: () => ({ name: 'isPlatformOs' }),
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
@@ -273,11 +273,11 @@ let subcommands = {
     },
   },
   'set-platform-os': {
-    description: 'Set IDE platform preview OS: web (plain browser) or win, nux, mac, android (also enables native:* and a form factor).',
+    description: 'Set IDE platform preview OS: web (plain browser) or win, lin, mac, android (also enables native:* and a form factor).',
     build: ({ flags, positionals }) => {
       let raw = String(flags.os ?? flags.value ?? positionals[0] ?? '').trim().toLowerCase();
-      if (!['web', 'win', 'nux', 'mac', 'android'].includes(raw)) {
-        throw new Error('Specify web, win, nux, mac, or android (e.g. wf set-platform-os nux).');
+      if (!['web', 'win', 'lin', 'mac', 'android'].includes(raw)) {
+        throw new Error('Specify web, win, lin, mac, or android (e.g. wf set-platform-os lin).');
       }
       return { name: 'setPlatformOs', params: { os: raw } };
     },

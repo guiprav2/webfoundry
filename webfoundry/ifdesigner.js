@@ -11,18 +11,18 @@ let post = data => parent.postMessage({ path: null, ...data, path: location.path
 let components = {};
 
 // Platform variants. Each is a condition on the element itself (`&:is(html[…] *)`)
-// so they stack (nux:mobile:hidden). :is() keeps specificity: OS > desktop|mobile > native > bare.
+// so they stack (lin:mobile:hidden). :is() keeps specificity: OS > desktop|mobile > native > bare.
 let PLATFORM_VARIANTS_CSS = [
   '@custom-variant native (&:is(html:where([wf-native-preview]) *));',
   '@custom-variant desktop (&:is(html[wf-desktop-preview] *));',
   '@custom-variant mobile (&:is(html[wf-mobile-preview] *));',
   '@custom-variant win (&:is(html[wf-win-preview] *));',
-  '@custom-variant nux (&:is(html[wf-nux-preview] *));',
+  '@custom-variant lin (&:is(html[wf-lin-preview] *));',
   '@custom-variant mac (&:is(html[wf-mac-preview] *));',
   '@custom-variant android (&:is(html[wf-android-preview] *));',
   '',
 ].join('\n');
-let PLATFORM_OSES = ['win', 'nux', 'mac', 'android'];
+let PLATFORM_OSES = ['win', 'lin', 'mac', 'android'];
 
 /** Ensure Tailwind sees the platform variants even if the project's head.js is stale. */
 function ensurePlatformVariantStyles() {
@@ -39,7 +39,7 @@ function ensurePlatformVariantStyles() {
 
 /**
  * Gate platform variants via html preview attributes. `mode` is the form factor
- * (off | desktop | mobile); `os` is web | win | nux | mac | android. Any form factor
+ * (off | desktop | mobile); `os` is web | win | lin | mac | android. Any form factor
  * turns on native:; an OS adds its own attribute. Parent posts (isolate is cross-origin).
  */
 function applyPlatformPreview(mode, os = 'web') {
@@ -52,14 +52,15 @@ function applyPlatformPreview(mode, os = 'web') {
   if (PLATFORM_OSES.includes(os)) root.setAttribute(`wf-${os}-preview`, '');
 }
 
-// Legacy values: true (old native preview) and win/nux/mac (OS-as-mode) imply desktop.
+// Legacy values: true (old native preview) and win/lin/mac (OS-as-mode) imply desktop.
 function normalizePlatformPreview(value) {
   if (value === 'desktop' || value === 'mobile') return value;
-  if (value === true || value === 'true' || PLATFORM_OSES.includes(value)) return 'desktop';
+  if (value === true || value === 'true' || value === 'nux' || PLATFORM_OSES.includes(value)) return 'desktop';
   return 'off';
 }
 
 function normalizePlatformOs(value, legacyMode) {
+  if (value === 'nux' || legacyMode === 'nux') return 'lin'; // Linux was `nux`
   if (PLATFORM_OSES.includes(value)) return value;
   if (PLATFORM_OSES.includes(legacyMode)) return legacyMode;
   return 'web';

@@ -98,8 +98,8 @@ let SHELL_COMMAND_GROUPS = [
       { syntax: 'setDisabledExpression expr', description: 'Set the wf-disabled expression.', tool: 'setDisabledExpression', args: [{ name: 'expr', description: 'Expression' }] },
       { syntax: 'isPlatformPreview', description: 'IDE platform preview form factor: off, desktop, or mobile (native:*/desktop:*/mobile:* in the designer).', tool: 'isPlatformPreview' },
       { syntax: 'setPlatformPreview off|desktop|mobile', description: 'Set IDE platform preview form factor for native:*/desktop:*/mobile:* utilities.', tool: 'setPlatformPreview', args: [{ name: 'mode', description: 'off, desktop, or mobile' }] },
-      { syntax: 'isPlatformOs', description: 'IDE platform preview OS: web, win, nux, mac, or android.', tool: 'isPlatformOs' },
-      { syntax: 'setPlatformOs web|win|nux|mac|android', description: 'Set IDE platform preview OS for win:*/nux:*/mac:*/android:* utilities (web = plain browser).', tool: 'setPlatformOs', args: [{ name: 'os', description: 'web, win, nux, mac, or android' }] },
+      { syntax: 'isPlatformOs', description: 'IDE platform preview OS: web, win, lin, mac, or android.', tool: 'isPlatformOs' },
+      { syntax: 'setPlatformOs web|win|lin|mac|android', description: 'Set IDE platform preview OS for win:*/lin:*/mac:*/android:* utilities (web = plain browser).', tool: 'setPlatformOs', args: [{ name: 'os', description: 'web, win, lin, mac, or android' }] },
       { syntax: 'isPagePreview', description: 'Current page mode: preview (page runs live) or edit (visual editor).', tool: 'isPagePreview' },
       { syntax: 'setPagePreview preview|edit|toggle', description: 'Switch the open page between preview and edit modes.', tool: 'setPagePreview', args: [{ name: 'mode', description: 'preview, edit, or toggle' }] },
     ],
@@ -2428,21 +2428,21 @@ let actions = window.actions = {
   },
 
   isPlatformOs: {
-    description: `Returns the IDE platform preview OS (web | win | nux | mac | android) for win:*/nux:*/mac:*/android:* utilities`,
+    description: `Returns the IDE platform preview OS (web | win | lin | mac | android) for win:*/lin:*/mac:*/android:* utilities`,
     parameters: { type: 'object', properties: {} },
     handler: async () => ({ success: true, os: state.designer.platformOs }),
   },
 
   setPlatformOs: {
-    description: `Set the IDE platform preview OS: web (plain browser, no platform variants) or win, nux, mac, android (enables that OS's variants plus native:* and a form factor, desktop by default, mobile for android)`,
+    description: `Set the IDE platform preview OS: web (plain browser, no platform variants) or win, lin, mac, android (enables that OS's variants plus native:* and a form factor, desktop by default, mobile for android)`,
     parameters: {
       type: 'object',
-      properties: { os: { type: 'string', enum: ['web', 'win', 'nux', 'mac', 'android'] } },
+      properties: { os: { type: 'string', enum: ['web', 'win', 'lin', 'mac', 'android'] } },
       required: ['os'],
     },
     handler: async ({ os } = {}) => {
-      if (!['web', 'win', 'nux', 'mac', 'android'].includes(os)) {
-        throw new Error('os must be web, win, nux, mac, or android');
+      if (!['web', 'win', 'lin', 'mac', 'android'].includes(os)) {
+        throw new Error('os must be web, win, lin, mac, or android');
       }
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setPlatformOs', os });
       await post('designer.setPlatformOs', os);

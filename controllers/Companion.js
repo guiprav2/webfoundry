@@ -252,8 +252,8 @@ export async function execWfCommand(command) {
     case 'setPlatformOs': {
       let action = actions.setPlatformOs;
       let os = typeof params.os === 'string' ? params.os.trim().toLowerCase() : params.os;
-      if (!['web', 'win', 'nux', 'mac', 'android'].includes(os)) {
-        return { success: false, error: 'os must be web, win, nux, mac, or android' };
+      if (!['web', 'win', 'lin', 'mac', 'android'].includes(os)) {
+        return { success: false, error: 'os must be web, win, lin, mac, or android' };
       }
       try {
         let result = await action.handler({ os });

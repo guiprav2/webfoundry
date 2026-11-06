@@ -73,6 +73,8 @@ export default class Projects {
           'webfoundry/dominant.js',
           'webfoundry/tailplay4.dafuq.js',
           'webfoundry/adwaita.tw.css',
+          'webfoundry/material.tw.css',
+          'webfoundry/fluent.tw.css',
           'webfoundry/adwaita-icons.css',
         ].map(async x => {
           let text = await (await fetch(x)).text();

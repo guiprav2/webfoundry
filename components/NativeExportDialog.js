@@ -13,9 +13,26 @@ const DEFAULTS = {
   documentClassNames: '',
 };
 
-// "Use system theme" per target: OS variants (nux:adw-* on Linux, …) apply in the
-// exported app. Android defaults to the web look (mobile:* still applies) for now.
-const SYSTEM_THEME_DEFAULTS = { 'linux-x64': true, 'win-x64': true, 'android-arm64': false };
+// Theme per target (at most one): a forced theme renders its platform's variant
+// whatever the build runs on (adwaita → lin:adw-*, kendo → win:win-*, beer →
+// android:and-*); system follows the host OS; none renders like the web preview.
+const THEMES = [
+  { id: 'adwaita', label: 'Use Adwaita' },
+  { id: 'kendo', label: 'Use Kendo UI' },
+  { id: 'beer', label: 'Use Beer' },
+  { id: 'system', label: 'Use system theme' },
+];
+const THEME_IDS = new Set([...THEMES.map(t => t.id), 'none']);
+const THEME_DEFAULTS = { 'linux-x64': 'system', 'win-x64': 'system', 'android-arm64': 'system' };
+
+// Older configs saved a per-target "Use system theme" boolean.
+function savedTheme(saved, id) {
+  let theme = saved.theme?.[id];
+  if (THEME_IDS.has(theme)) return theme;
+  let legacy = saved.systemTheme?.[id];
+  if (typeof legacy === 'boolean') return legacy ? 'system' : 'none';
+  return THEME_DEFAULTS[id];
+}
 
 function normalizeResizable(value) {
   let mode = String(value ?? DEFAULTS.resizable).trim().toLowerCase();
@@ -64,10 +81,9 @@ class NativeExportDialog {
     }
     // Stable array identity — a getter that returns a fresh array each read
     // makes Dominant wf-map thrash and can freeze/crash the tab.
-    this.systemThemeByTarget = {};
-    for (let id of Object.keys(SYSTEM_THEME_DEFAULTS)) {
-      this.systemThemeByTarget[id] = typeof saved.systemTheme?.[id] === 'boolean' ? saved.systemTheme[id] : SYSTEM_THEME_DEFAULTS[id];
-    }
+    this.themes = THEMES; // stable identity for wf-map
+    this.themeByTarget = {};
+    for (let id of Object.keys(THEME_DEFAULTS)) this.themeByTarget[id] = savedTheme(saved, id);
     this.targets = [
       { id: 'linux-x64', label: 'Linux x64', available: true },
       { id: 'win-x64', label: 'Windows x64 (coming soon)', available: false },
@@ -86,13 +102,15 @@ class NativeExportDialog {
     this.classNamesByTarget[this.target] = value;
   }
 
-  get systemTheme() {
-    return !!this.systemThemeByTarget[this.target];
+  get theme() {
+    return this.themeByTarget[this.target] ?? 'none';
   }
 
-  set systemTheme(value) {
-    this.systemThemeByTarget[this.target] = !!value;
-  }
+  // Pills behave like a toggleable radio group: picking the active one turns it off.
+  toggleTheme = id => {
+    this.themeByTarget[this.target] = this.theme === id ? 'none' : id;
+    d.update();
+  };
 
   get isAndroid() {
     return this.target === 'android-arm64';
@@ -130,7 +148,7 @@ class NativeExportDialog {
           target: this.target,
           orientation: normalizeOrientation(this.orientation),
           documentClassNames: normalizeClassNames(this.documentClassNames),
-          systemTheme: this.systemTheme,
+          theme: this.theme,
         }
       : {
           target: this.target,
@@ -142,7 +160,7 @@ class NativeExportDialog {
           dragAnywhere: !!this.dragAnywhere,
           resizable: normalizeResizable(this.resizable),
           documentClassNames: normalizeClassNames(this.documentClassNames),
-          systemTheme: this.systemTheme,
+          theme: this.theme,
         };
     // Persist every target's settings (not just the chosen one's) so switching targets never drops the others.
     let classNames = {};
@@ -158,7 +176,7 @@ class NativeExportDialog {
       resizable: normalizeResizable(this.resizable),
       orientation: normalizeOrientation(this.orientation),
       documentClassNames: classNames,
-      systemTheme: { ...this.systemThemeByTarget },
+      theme: { ...this.themeByTarget },
     };
     try {
       await post('settings.projectOption', 'nativeExport', saved);

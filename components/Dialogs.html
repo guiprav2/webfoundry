@@ -970,16 +970,55 @@
                   </select>
                 </label>
               </div>
+              <div
+                class="mb-3 flex flex-col gap-1.5 px-0.5 text-xs text-neutral-400"
+              >
+                Theme
+                <div
+                  class="flex flex-wrap gap-1.5"
+                  role="group"
+                  aria-label="Theme"
+                >
+                  <button
+                    type="button"
+                    title="GNOME Adwaita (lin:adw-*) on any platform"
+                    class="rounded-full px-3 py-1 text-xs border outline-none transition-colors border-white/15 text-neutral-300 hover:bg-[#121d2b]"
+                    wf-class="{{replaces border-white/15 text-neutral-300 hover:bg-[#121d2b]: this.theme === 'adwaita' ? 'border-[#0071b2] bg-[#0071b2] text-white hover:bg-[#008ad9]' : 'border-white/15 text-neutral-300 hover:bg-[#121d2b]'}}"
+                    wf-onclick="this.toggleTheme('adwaita')"
+                    value=""
+                  >
+                    Use Adwaita</button
+                  ><button
+                    type="button"
+                    title="Windows Fluent 2 (win:win-*) on any platform"
+                    class="rounded-full px-3 py-1 text-xs border outline-none transition-colors border-white/15 text-neutral-300 hover:bg-[#121d2b]"
+                    wf-class="{{replaces border-white/15 text-neutral-300 hover:bg-[#121d2b]: this.theme === 'kendo' ? 'border-[#0071b2] bg-[#0071b2] text-white hover:bg-[#008ad9]' : 'border-white/15 text-neutral-300 hover:bg-[#121d2b]'}}"
+                    wf-onclick="this.toggleTheme('kendo')"
+                    value=""
+                  >
+                    Use Kendo UI</button
+                  ><button
+                    type="button"
+                    title="Android Material Design 3 (android:and-*) on any platform"
+                    class="rounded-full px-3 py-1 text-xs border outline-none transition-colors border-white/15 text-neutral-300 hover:bg-[#121d2b]"
+                    wf-class="{{replaces border-white/15 text-neutral-300 hover:bg-[#121d2b]: this.theme === 'beer' ? 'border-[#0071b2] bg-[#0071b2] text-white hover:bg-[#008ad9]' : 'border-white/15 text-neutral-300 hover:bg-[#121d2b]'}}"
+                    wf-onclick="this.toggleTheme('beer')"
+                    value=""
+                  >
+                    Use Beer</button
+                  ><button
+                    type="button"
+                    title="Follow the device OS (lin:/win:/android: variants)"
+                    class="rounded-full px-3 py-1 text-xs border outline-none transition-colors border-white/15 text-neutral-300 hover:bg-[#121d2b]"
+                    wf-class="{{replaces border-white/15 text-neutral-300 hover:bg-[#121d2b]: this.theme === 'system' ? 'border-[#0071b2] bg-[#0071b2] text-white hover:bg-[#008ad9]' : 'border-white/15 text-neutral-300 hover:bg-[#121d2b]'}}"
+                    wf-onclick="this.toggleTheme('system')"
+                    value=""
+                  >
+                    Use system theme
+                  </button>
+                </div>
+              </div>
               <label
-                class="mb-3 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
-                title="Apply OS-specific classes (e.g. nux:adw-* on Linux). Unchecked, the app renders like the web preview."
-                ><input
-                  type="checkbox"
-                  class="accent-[#2a9df4]"
-                  value="on"
-                  wf-checked="this.systemTheme"
-                /><span>Use system theme</span></label
-              ><label
                 class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5"
               >
                 Document class names

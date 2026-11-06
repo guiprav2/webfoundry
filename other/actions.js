@@ -98,6 +98,8 @@ let SHELL_COMMAND_GROUPS = [
       { syntax: 'setDisabledExpression expr', description: 'Set the wf-disabled expression.', tool: 'setDisabledExpression', args: [{ name: 'expr', description: 'Expression' }] },
       { syntax: 'isPlatformPreview', description: 'IDE platform preview mode: off, desktop, or mobile (desktop:*/mobile:* in the designer).', tool: 'isPlatformPreview' },
       { syntax: 'setPlatformPreview off|desktop|mobile', description: 'Set IDE platform preview mode for desktop:*/mobile:* utilities.', tool: 'setPlatformPreview', args: [{ name: 'mode', description: 'off, desktop, or mobile' }] },
+      { syntax: 'isPagePreview', description: 'Current page mode: preview (page runs live) or edit (visual editor).', tool: 'isPagePreview' },
+      { syntax: 'setPagePreview preview|edit|toggle', description: 'Switch the open page between preview and edit modes.', tool: 'setPagePreview', args: [{ name: 'mode', description: 'preview, edit, or toggle' }] },
     ],
   },
   {
@@ -2422,6 +2424,33 @@ let actions = window.actions = {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setPlatformPreview', mode });
       await post('designer.setPlatformPreview', mode);
       return { success: true, mode };
+    },
+  },
+
+  isPagePreview: {
+    description: `Returns the open page's mode: preview (page runs live) or edit (visual editor)`,
+    disabled: () => [!state.designer.open && `Designer closed.`],
+    parameters: { type: 'object', properties: {} },
+    handler: async () => ({ success: true, mode: state.designer.current?.preview ? 'preview' : 'edit' }),
+  },
+
+  setPagePreview: {
+    description: `Switch the open page between preview (page runs live) and edit (visual editor) modes`,
+    disabled: () => [
+      !state.designer.open && `Designer closed.`,
+      state.collab.uid !== 'master' && `Peers can't toggle preview.`,
+    ],
+    parameters: {
+      type: 'object',
+      properties: { mode: { type: 'string', enum: ['preview', 'edit', 'toggle'] } },
+      required: ['mode'],
+    },
+    handler: async ({ mode } = {}) => {
+      if (mode !== 'preview' && mode !== 'edit' && mode !== 'toggle') throw new Error('mode must be preview, edit, or toggle');
+      let current = state.designer.current?.preview ? 'preview' : 'edit';
+      if (mode === 'toggle') mode = current === 'preview' ? 'edit' : 'preview';
+      if (mode !== current) await post('designer.togglePreview');
+      return { success: true, mode: state.designer.current?.preview ? 'preview' : 'edit' };
     },
   },
 

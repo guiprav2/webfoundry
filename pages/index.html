@@ -27,7 +27,7 @@
         <span class="inline-flex items-center gap-2 flex-wrap justify-center">
           <span class="relative flex w-1.5 !h-1.5"
             ><span
-              class="absolute inline-flex h-full w-full rounded-full bg-[#d9ff7a] opacity-60 animate-ping motion-reduce:animate-none"
+              class="absolute inline-flex h-full w-full rounded-full bg-[#d9ff7a] opacity-60 animate-ping motion-reduce:animate-none !min-h-auto"
             ></span
             ><span
               class="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#d9ff7a] !min-h-auto"
@@ -300,7 +300,7 @@
                     >
                       <rect x="4" y="10" width="16" height="11" rx="2"></rect>
                       <path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg
-                    >www.webfoundry.app/editor.html
+                    >{{state.landing.editorHost}}/editor.html
                   </div>
                   <button
                     type="button"
@@ -339,11 +339,11 @@
                       role="tab"
                       class="demo-tab bg-white text-[#16171d] px-3.5 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors"
                       value=""
-                      wf-onclick="post('landing.selectTemplate', 'self')"
-                      wf-class="{{replaces bg-white text-[#16171d]: state.landing.currentTemplate === 'self' ? 'bg-white text-[#16171d]' : 'text-white/60 hover:text-white hover:bg-white/10'}}"
-                      data-demo="self"
+                      wf-onclick="post('landing.selectTemplate', t.id)"
+                      wf-class="{{replaces bg-white text-[#16171d]: state.landing.currentTemplate === t.id ? 'bg-white text-[#16171d]' : 'text-white/60 hover:text-white hover:bg-white/10'}}"
+                      wf-map="t of state.landing.templates"
                     >
-                      Webfoundry itself
+                      {{t.label}}
                     </button>
                   </div>
                   <div
@@ -398,7 +398,7 @@
                       <p class="text-white/55 mt-3 leading-relaxed text-sm">
                         The live demo loads the hosted editor from
                         <span class="text-[#d9ff7a] font-mono"
-                          >www.webfoundry.app</span
+                          >{{state.landing.editorHost}}</span
                         >. Reload this frame if it doesn't appear.
                       </p>
                       <p
@@ -417,7 +417,6 @@
                     allow="clipboard-read; clipboard-write"
                     class="absolute outline-none inset-0 w-full h-full border-0 transition-opacity duration-500"
                     wf-class="{{!state.landing.frameLoaded &amp;&amp; 'opacity-0'}}"
-                    src="https://www.webfoundry.app/editor.html?demo&amp;autoplay&amp;git=https://github.com/guiprav2/webfoundry57.git"
                     wf-src="state.landing.frameSrc"
                     wf-onload="post('landing.frameLoaded')"
                   ></iframe>
@@ -1910,7 +1909,6 @@
               id="open-editor-new-tab"
               target="_blank"
               rel="noopener noreferrer"
-              href="https://www.webfoundry.app/editor.html?demo&amp;autoplay&amp;git=https://github.com/guiprav2/webfoundry57.git"
               class="text-[11px] font-bold px-3 py-2 border border-white/15 rounded-lg hover:bg-white/10"
               wf-href="state.landing.frameSrc"
               >Open new tab ↗</a

@@ -274,6 +274,8 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Comma
 * `wf toggle-hidden`
 * `wf is-platform-preview` – print `off` / `desktop` / `mobile` for IDE platform preview
 * `wf set-platform-preview off|desktop|mobile` – set platform preview (enable before working on `native:` / `desktop:` / `mobile:` looks; either on-mode also activates `native:`; restore or leave on based on context afterward)
+* `wf is-page-preview` – print the open page's mode: `preview` (the page runs live, as users see it) or `edit` (visual editor)
+* `wf set-page-preview preview|edit|toggle` – switch the open page between preview and edit modes (same as the editor's Preview button)
 
 ### Logic & Events
 
@@ -295,6 +297,7 @@ All `wf` commands accept `--cur` to target a different designer cursor (defaults
 * DOM operations (create, paste, wrap, attribute changes, etc.) operate on the currently selected elements. Open a page with `selectFile` and immediately `wf change-selection` the root or target node before editing.
 * Event handler commands expect `event=expression` pairs (e.g. `wf add-event-handlers click=post('app.handleClick')`).
 * When a command reports missing IDs, refresh your snapshot with `wf read-html` before retrying.
+* Page preview is distinct from platform preview: page preview runs the page live (bindings, controllers, event handlers), while platform preview only changes which `native:` / `desktop:` / `mobile:` utilities apply. Use `wf set-page-preview preview` to check runtime behavior, then `wf set-page-preview edit` to go back to the visual editor; restore whichever mode the user had when you're done. Switching modes reloads the page, so `data-htmlsnap` IDs change: run `wf read-html` again before selecting elements.
 * Chain multiple `wf` commands using && when the commands are closely related, speeding things up and making changes look more atomic.
 * *NEVER* use text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands.
 

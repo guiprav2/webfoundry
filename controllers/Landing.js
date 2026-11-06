@@ -1,21 +1,31 @@
 import { getOpenAIKey, setOpenAIKey } from '../other/openai.js';
 
-let editorOrigin = 'https://www.webfoundry.app/';
+// Load the editor from whatever origin is serving this page, so the demo runs this same build.
+let editorOrigin = `${location.origin}/`;
+
+let templates = [
+  {
+    id: 'todomvc',
+    label: 'TodoMVC',
+    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/todomvc.git`,
+  },
+  {
+    id: 'self',
+    label: 'Webfoundry itself',
+    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry57.git`,
+  },
+];
+let defaultTemplate = templates.find(x => x.id === 'todomvc');
 
 export default class Landing {
   state = {
-    templates: [
-      {
-        id: 'self',
-        label: 'Webfoundry itself',
-        href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry57.git`,
-      },
-    ],
-    currentTemplate: 'self',
+    templates,
+    currentTemplate: defaultTemplate.id,
     currentKey: '',
     pendingKey: '',
-    frameSrc: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry57.git`,
-    frameCaption: 'editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry57.git',
+    frameSrc: defaultTemplate.href,
+    frameCaption: defaultTemplate.href.replace(editorOrigin, ''),
+    editorHost: location.host,
     frameLoaded: false,
     showKeyModal: false,
     showDemoModal: false,

@@ -533,52 +533,31 @@ export default class Files {
           return;
         }
       }
-      let initialName = derivedName || 'imported-project';
-      while (true) {
-        let repoUrl = query;
-        let branch = 'master';
-        let projectName = initialName;
-        if (!repoUrl || !branch || !projectName) {
-          dialogProps = {
-            ...dialogProps,
-            initialUrl: repoUrl || '',
-            initialBranch: branch || '',
-            initialName: projectName || dialogProps.initialName,
-            nameError: '',
-          };
-          continue;
-        }
-        if (state.projects.list.find(x => x.split(':')[0] === projectName)) {
-          dialogProps = {
-            ...dialogProps,
-            initialUrl: repoUrl,
-            initialBranch: branch,
-            initialName: projectName,
-            nameError: 'Project with this name already exists. Choose another name.',
-          };
-          continue;
-        }
-        let project;
-        this.state.importing++;
+      let repoUrl = presetUrl;
+      let branch = 'master';
+      if (!repoUrl) return;
+      let baseName = derivedName || 'imported-project';
+      let projectName = baseName;
+      for (let n = 2; state.projects.list.some(x => x.split(':')[0] === projectName); n++) projectName = `${baseName}-${n}`;
+      let project;
+      this.state.importing++;
+      try {
         try {
-          try {
-            project = await post('projects.create', projectName);
-          } catch (err) {
-            console.error(err);
-            await showModal('InfoDialog', { title: `Failed to create project: ${err.message}` });
-            return;
-          }
-          if (!project) project = state.projects.list.find(x => x.startsWith(`${projectName}:`));
-          try {
-            await runGitImportFlow(project, repoUrl, branch);
-          } catch (err) {
-            console.error(err);
-            await showModal('InfoDialog', { title: `Git import failed: ${err.message}` });
-          }
-        } finally {
-          this.state.importing--;
+          project = await post('projects.create', projectName);
+        } catch (err) {
+          console.error(err);
+          await showModal('InfoDialog', { title: `Failed to create project: ${err.message}` });
+          return;
         }
-        return;
+        if (!project) project = state.projects.list.find(x => x.startsWith(`${projectName}:`));
+        try {
+          await runGitImportFlow(project, repoUrl, branch);
+        } catch (err) {
+          console.error(err);
+          await showModal('InfoDialog', { title: `Git import failed: ${err.message}` });
+        }
+      } finally {
+        this.state.importing--;
       }
     },
 

@@ -58,6 +58,8 @@ function helpText() {
   lines.push('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
   lines.push('  wf set-platform-preview desktop');
   lines.push('  wf is-platform-preview');
+  lines.push('  wf set-page-preview toggle');
+  lines.push('  wf is-page-preview');
   return lines.map(line => line + '\n').join('');
 }
 
@@ -259,6 +261,28 @@ let subcommands = {
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
       io.log(`Platform Preview: ${result.mode || 'off'}`);
+    },
+  },
+  'is-page-preview': {
+    description: 'Print the open page mode: preview (page runs live) or edit (visual editor).',
+    build: () => ({ name: 'isPagePreview' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(result.mode);
+    },
+  },
+  'set-page-preview': {
+    description: 'Switch the open page to preview or edit mode, or toggle between them.',
+    build: ({ flags, positionals }) => {
+      let raw = String(flags.mode ?? positionals[0] ?? '').trim().toLowerCase();
+      if (raw !== 'preview' && raw !== 'edit' && raw !== 'toggle') {
+        throw new Error('Specify preview, edit, or toggle (e.g. wf set-page-preview preview).');
+      }
+      return { name: 'setPagePreview', params: { mode: raw } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Page mode: ${result.mode}`);
     },
   },
   'change-html': {

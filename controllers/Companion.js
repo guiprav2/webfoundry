@@ -194,12 +194,25 @@ function createClient(key, opt = {}) {
   return ret;
 }
 
+let PAGE_EDIT_COMMANDS = new Set([
+  'wrap', 'unwrap', 'deleteSelected', 'changeElementTag', 'addCssClasses', 'removeCssClasses', 'replaceCssClasses',
+  'replaceTextContent', 'changeInputPlaceholder', 'changeLinkUrl', 'changeMediaSrc', 'setInputValue',
+  'setIfExpression', 'setMapExpression', 'setDisabledExpression', 'changeElementId', 'changeHtml', 'changeInnerHtml',
+  'changeFormMethod', 'createFirstChild', 'createLastChild', 'createNextSibling', 'createPrevSibling',
+  'pasteFirstChild', 'pasteLastChild', 'pasteNextSibling', 'pastePrevSibling', 'toggleHidden',
+  'setEventHandlers', 'addEventHandlers', 'removeEventHandlers',
+]);
+
 export async function execWfCommand(command) {
   if (!command || typeof command !== 'object') throw new Error('Invalid command payload.');
   let { name, params = {} } = command;
   if (!name) throw new Error('Command name missing.');
   let actions = window.actions;
   let cur = params.cur ?? 'master';
+  // The preview iframe doesn't run the designer bridge, so edits would just hang until timeout.
+  if (PAGE_EDIT_COMMANDS.has(name) && state.designer.current?.ready && state.designer.current.preview) {
+    return { success: false, error: `Can't edit in preview mode. Switch back with: wf set-page-preview edit` };
+  }
   switch (name) {
     case 'readHtml': {
       if (!state.designer.current?.ready) return { success: false, error: `Designer closed`, hint: `Use selectFile to open the desired HTML file for editing first` };
@@ -233,6 +246,23 @@ export async function execWfCommand(command) {
       let mode = state.settings.opt.platformPreview;
       if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
       return { success: true, mode };
+    }
+    case 'isPagePreview':
+    case 'setPagePreview': {
+      let action = actions[name];
+      let reasons = action.disabled?.(params)?.filter?.(Boolean) || [];
+      if (reasons.length) {
+        let lines = reasons.map(x => `- ${x}`);
+        if (reasons.some(x => typeof x === 'string' && x.includes('Designer closed'))) {
+          lines.push('Hint: use selectFile to open the desired HTML first');
+        }
+        return { success: false, error: lines.join('\n') };
+      }
+      try {
+        return await action.handler(params);
+      } catch (err) {
+        return { success: false, error: err?.message || String(err) };
+      }
     }
     case 'setPlatformPreview': {
       let action = actions.setPlatformPreview;

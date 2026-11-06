@@ -175,7 +175,13 @@ export default class Designer {
             break;
           }
           case 'keydown': await post('designer.keydown', ev.data); break;
-          case 'action': await actions[ev.data.key].handler(ev.data); break;
+          case 'action':
+            // ifdesigner preventDefault()s mousedown, so clicking the canvas never moves focus.
+            // When the editor is itself embedded (e.g. the landing page demo), focus would stay
+            // in the embedding page and our keydown shortcuts would never fire.
+            if (ev.data.key === 'changeSelection' && !document.hasFocus()) window.focus();
+            await actions[ev.data.key].handler(ev.data);
+            break;
         }
       });
       addEventListener(state.app.mobile ? 'input' : 'keydown', async ev => await post('designer.keydown', ev), true);

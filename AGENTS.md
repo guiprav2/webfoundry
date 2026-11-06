@@ -8,6 +8,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 
 * MOST IMPORTANT (DO NOT IGNORE): Never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.) Always use `wf select-file`, `wf read-html`, `wf change-selection`, and the other DOM manipulation commands documented below to modify markup safely.
 * `wf read-html` only works when the last `wf select-file` command was an HTML file. Make sure to `wf select-file` before calling `wf read-html`.
+* No need for `wf select-file` before manipulating non-HTML files
 * Webfoundry projects are all UTF-8, so ignore ASCII-only instructions.
 * Suggestions for requests on a mostly empty project (no HTML or JS files): Begin by calling `wf create-file` to scaffold pages/index.html and/or controllers/App.js.
 * In Webfoundry, a div right under body is the page root, not body itself. Make sure all page content is wrapped inside that root div.

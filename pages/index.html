@@ -15,10 +15,13 @@
     <script type="module" src="../webfoundry/ifdesigner.js"></script>
     <script src="../webfoundry/head.js"></script>
   </head>
-  <body style="display: none">
+  <body
+    class="flex flex-col [&amp;&gt;div:first-child]:flex-1 min-h-screen"
+    style="display: none"
+  >
     <div
-      class="bg-[#f6f4ef] text-[#16171d] antialiased selection:bg-[#7054ed] selection:text-white overflow-x-hidden"
       wf-onattach="post('landing.init')"
+      class="bg-[#f6f4ef] text-[#16171d] antialiased selection:bg-[#7054ed] selection:text-white overflow-x-hidden"
     >
       <!-- Top announcement -->
       <div

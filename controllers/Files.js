@@ -150,7 +150,11 @@ export default class Files {
         if (k !== 'storage') return;
         preventDefault();
         let project = state.projects.current;
-        let [btn] = await showModal('ConfirmationDialog', { title: 'Ya sure?' });
+        // Turning Companion FS off (v === 'local') moves files into browser storage, then deletes the folder on disk (rfiles.push).
+        let warning = v === 'local'
+          ? `This will remove the project directory (${project.split(':')[0]}/) from your local file system. Its files will be moved into browser storage.`
+          : null;
+        let [btn] = await showModal('ConfirmationDialog', { title: 'Are you sure?', warning });
         if (btn !== 'yes') return;
         await post(v === 'local' ? 'files.push' : 'files.pull');
       });

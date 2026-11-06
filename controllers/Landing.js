@@ -12,7 +12,7 @@ let templates = [
   {
     id: 'self',
     label: 'Webfoundry itself',
-    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry57.git`,
+    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry.git`,
   },
 ];
 let defaultTemplate = templates.find(x => x.id === 'todomvc');

@@ -12,6 +12,9 @@ import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 import { downloadBlob, exportAndroidApk, exportLinuxAppImage } from '../nasty/export-native.js';
 
+// Runtime files projects created before adw-* support may lack (served from the IDE instead).
+let ADWAITA_RUNTIME_FILES = ['webfoundry/adwaita.tw.css', 'webfoundry/adwaita-icons.css'];
+
 let loadChain = Promise.resolve();
 
 export default class Files {
@@ -40,9 +43,20 @@ export default class Files {
         try {
           path = decodeURIComponent(path);
           if (!project?.includes?.(':')) return callback({ type: 'fetch:res', project, path, status: 400, error: 'Bad project' });
-          let data = state.collab.uid === 'master'
-            ? await rfiles.load(project, path)
-            : await ungzblob(unb64(await post('collab.rpc', 'fetch', { project, path })), mimeLookup(path));
+          let adwaitaRuntime = ADWAITA_RUNTIME_FILES.includes(path);
+          let data;
+          try {
+            data = state.collab.uid === 'master'
+              ? await rfiles.load(project, path)
+              : await ungzblob(unb64(await post('collab.rpc', 'fetch', { project, path })), mimeLookup(path));
+          } catch (err) {
+            if (!adwaitaRuntime) throw err;
+          }
+          // Projects created before adw-* support lack these runtime files; serve the IDE's copies.
+          if (!data && adwaitaRuntime) {
+            let res = await fetch(path);
+            if (res.ok) data = await res.blob();
+          }
           if (!data) return callback({ type: 'fetch:res', project, path, status: 404, error: 'Not found' });
           callback({ type: 'fetch:res', project, path, status: 200, data });
         } catch (err) {
@@ -341,10 +355,10 @@ export default class Files {
         [btn, type, x, selectedMode] = await showModal('NetlifyDeployDialog', { key, id: siteId, mode: deployMode });
         if (selectedMode) deployMode = selectedMode;
         if (btn === 'key') {
-          let key = localStorage.getItem('webfoundry:netlifyApiKey');
-          let [btn, x] = await showModal('NetlifyApiKeyDialog', { key });
-          if (btn !== 'ok') continue;
-          key = x;
+          // Assign the outer `key` (no shadowing), so the deploy uses the new key.
+          let [keyBtn, newKey] = await showModal('NetlifyApiKeyDialog', { key });
+          if (keyBtn !== 'ok') continue;
+          key = newKey;
           localStorage.setItem('webfoundry:netlifyApiKey', key);
           if (!key) return;
           continue;
@@ -603,6 +617,7 @@ export default class Files {
             name,
             orientation: windowOpts.orientation,
             documentClassNames: windowOpts.documentClassNames,
+            systemTheme: windowOpts.systemTheme,
           });
           filename = `${name}.apk`;
         } else {
@@ -616,6 +631,7 @@ export default class Files {
             dragAnywhere: windowOpts.dragAnywhere,
             resizable: windowOpts.resizable,
             documentClassNames: windowOpts.documentClassNames,
+            systemTheme: windowOpts.systemTheme,
           });
           filename = `${name}-x86_64.AppImage`;
         }

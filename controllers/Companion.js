@@ -243,9 +243,24 @@ export async function execWfCommand(command) {
       let action = actions.isPlatformPreview;
       let result = await action.handler(params);
       if (result !== undefined) return result;
-      let mode = state.settings.opt.platformPreview;
-      if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
-      return { success: true, mode };
+      return { success: true, mode: state.designer.platformForm };
+    }
+    case 'isPlatformOs': {
+      let result = await actions.isPlatformOs.handler(params);
+      return result ?? { success: true, os: state.designer.platformOs };
+    }
+    case 'setPlatformOs': {
+      let action = actions.setPlatformOs;
+      let os = typeof params.os === 'string' ? params.os.trim().toLowerCase() : params.os;
+      if (!['web', 'win', 'nux', 'mac', 'android'].includes(os)) {
+        return { success: false, error: 'os must be web, win, nux, mac, or android' };
+      }
+      try {
+        let result = await action.handler({ os });
+        return result === undefined ? { success: true, os } : result;
+      } catch (err) {
+        return { success: false, error: err?.message || String(err) };
+      }
     }
     case 'isPagePreview':
     case 'setPagePreview': {
@@ -268,7 +283,7 @@ export async function execWfCommand(command) {
       let action = actions.setPlatformPreview;
       let mode = params.mode;
       if (typeof mode === 'string') mode = mode.trim().toLowerCase();
-      if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
+      if (!['off', 'desktop', 'mobile'].includes(mode)) {
         return { success: false, error: 'mode must be off, desktop, or mobile' };
       }
       let reasons = action.disabled?.({ mode })?.filter?.(Boolean) || [];

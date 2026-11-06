@@ -144,7 +144,7 @@
           wf-if="state.designer.open &amp;&amp; !state.designer.current.preview &amp;&amp; state.settings.opt.toolbar &amp;&amp; !state.app.demo"
         >
           <div
-            class="text-neutral-100 border-b border-black/50 flex px-4 items-center py-3 gap-4"
+            class="text-neutral-100 border-b border-black/50 flex px-4 items-center py-3 gap-4 overflow-x-auto"
             wf-if="state.designer.toolbar === 'manipulation'"
           >
             <div class="relative inline-block group">
@@ -1012,14 +1012,66 @@
                 </div>
               </div>
             </div>
+            <span
+              class="text-xs font-mono text-neutral-400 whitespace-nowrap self-center"
+              wf-if="state.designer.selSize"
+              >{{state.designer.selSize}}</span
+            >
 
             <div class="flex gap-1 items-center">
+              <div
+                role="radiogroup"
+                aria-label="Preview platform"
+                class="flex items-center gap-0.5 pr-1 mr-0.5 border-r border-white/10"
+                wf-if="state.designer.hasPlatformClasses"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  title="Web"
+                  aria-label="Web"
+                  class="nf nf-md-web outline-none text-sm w-7 h-7 inline-flex items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-neutral-100"
+                  wf-class="{{state.designer.platformOs === 'web' &amp;&amp; state.designer.platformForm === 'off' &amp;&amp; 'bg-white/15 text-white'}}"
+                  wf-onclick="event.preventDefault(), post('designer.setPlatformOs', 'web')"
+                  value=""
+                ></button
+                ><button
+                  type="button"
+                  role="radio"
+                  title="Windows"
+                  aria-label="Windows"
+                  class="nf nf-md-microsoft_windows outline-none text-sm w-7 h-7 inline-flex items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-neutral-100"
+                  wf-class="{{state.designer.platformOs === 'win' &amp;&amp; 'bg-white/15 text-white'}}"
+                  wf-onclick="event.preventDefault(), post('designer.setPlatformOs', 'win')"
+                  value=""
+                ></button
+                ><button
+                  type="button"
+                  role="radio"
+                  title="Linux"
+                  aria-label="Linux"
+                  class="nf nf-md-linux outline-none text-sm w-7 h-7 inline-flex items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-neutral-100"
+                  wf-class="{{state.designer.platformOs === 'nux' &amp;&amp; 'bg-white/15 text-white'}}"
+                  wf-onclick="event.preventDefault(), post('designer.setPlatformOs', 'nux')"
+                  value=""
+                ></button
+                ><button
+                  type="button"
+                  role="radio"
+                  title="Android"
+                  aria-label="Android"
+                  class="nf nf-md-android outline-none text-sm w-7 h-7 inline-flex items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-neutral-100"
+                  wf-class="{{state.designer.platformOs === 'android' &amp;&amp; 'bg-white/15 text-white'}}"
+                  wf-onclick="event.preventDefault(), post('designer.setPlatformOs', 'android')"
+                  value=""
+                ></button>
+              </div>
               <button
                 type="button"
-                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10"
+                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10 whitespace-nowrap"
                 title="Preview native:* and desktop:* Tailwind utilities"
                 wf-if="state.designer.hasPlatformClasses"
-                wf-class="{{state.settings.opt.platformPreview === 'desktop' &amp;&amp; 'bg-white/15'}}"
+                wf-class="{{state.designer.platformForm === 'desktop' &amp;&amp; 'bg-white/15'}}"
                 wf-onclick="event.preventDefault(), post('designer.togglePlatformPreview', 'desktop')"
                 value=""
               >
@@ -1027,10 +1079,10 @@
               </button>
               <button
                 type="button"
-                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10"
+                class="outline-none text-sm px-2.5 py-1 rounded-md text-neutral-200 hover:bg-white/10 whitespace-nowrap"
                 title="Preview native:* and mobile:* Tailwind utilities"
                 wf-if="state.designer.hasPlatformClasses"
-                wf-class="{{state.settings.opt.platformPreview === 'mobile' &amp;&amp; 'bg-white/15'}}"
+                wf-class="{{state.designer.platformForm === 'mobile' &amp;&amp; 'bg-white/15'}}"
                 wf-onclick="event.preventDefault(), post('designer.togglePlatformPreview', 'mobile')"
                 value=""
               >
@@ -1057,7 +1109,7 @@
           </div>
 
           <div
-            class="text-neutral-100 border-b border-black/50 flex px-4 items-center py-3 gap-4"
+            class="text-neutral-100 border-b border-black/50 flex px-4 items-center py-3 gap-4 overflow-x-auto"
             wf-if="state.designer.toolbar === 'tailwind'"
           >
             <div class="relative inline-block group">
@@ -3199,8 +3251,54 @@
                     wf-class=""
                   >
                     {{state.settings.hasOpenAIKey &amp;&amp; 'Configured'}}
-                  </div>
-                </button>
+                  </div></button
+                ><button
+                  class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none"
+                  wf-onclick="event.preventDefault(), post('settings.setXAIKey')"
+                  value=""
+                  wf-disabled="loadman.busy()"
+                >
+                  <div>xAI API key</div>
+                  <div class="text-sm truncate max-w-32 text-green-400">
+                    {{state.settings.hasXAIKey &amp;&amp; 'Configured'}}
+                  </div></button
+                ><label
+                  class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none cursor-pointer"
+                  ><div class="shrink-0">OpenAI coding agent</div>
+                  <div class="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      class="peer hidden"
+                      wf-disabled="loadman.busy()"
+                      wf-checked="state.settings.opt.codingAgent !== 'xai'"
+                      wf-onclick="event.preventDefault(), post('settings.option', 'codingAgent', 'openai')"
+                      value="on"
+                    />
+                    <div
+                      class="w-11 h-6 rounded-full peer-checked:bg-green-500 bg-black/50"
+                    ></div>
+                    <div
+                      class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"
+                    ></div></div></label
+                ><label
+                  class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none cursor-pointer"
+                  ><div class="shrink-0">xAI coding agent</div>
+                  <div class="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      class="peer hidden"
+                      wf-disabled="loadman.busy()"
+                      wf-checked="state.settings.opt.codingAgent === 'xai'"
+                      wf-onclick="event.preventDefault(), post('settings.option', 'codingAgent', 'xai')"
+                      value="on"
+                    />
+                    <div
+                      class="w-11 h-6 rounded-full peer-checked:bg-green-500 bg-black/50"
+                    ></div>
+                    <div
+                      class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"
+                    ></div></div
+                ></label>
                 <label
                   class="w-full text-left px-3 py-2 flex justify-between items-center rounded hover:bg-black/50 outline-none cursor-pointer"
                   wf-if="state.settings.opt.su &amp;&amp; !state.collab.rtc"

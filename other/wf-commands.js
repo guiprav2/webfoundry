@@ -58,6 +58,7 @@ function helpText() {
   lines.push('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
   lines.push('  wf set-platform-preview desktop');
   lines.push('  wf is-platform-preview');
+  lines.push('  wf set-platform-os nux');
   lines.push('  wf set-page-preview toggle');
   lines.push('  wf is-page-preview');
   return lines.map(line => line + '\n').join('');
@@ -242,7 +243,7 @@ let subcommands = {
     format: formatToggleHiddenResult,
   },
   'is-platform-preview': {
-    description: 'Print IDE platform preview mode (off, desktop, or mobile) for desktop:*/mobile:*.',
+    description: 'Print IDE platform preview form factor (off, desktop, or mobile).',
     build: () => ({ name: 'isPlatformPreview' }),
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
@@ -250,10 +251,10 @@ let subcommands = {
     },
   },
   'set-platform-preview': {
-    description: 'Set IDE platform preview to off, desktop, or mobile (desktop:*/mobile:* in the designer iframe).',
+    description: 'Set IDE platform preview form factor to off, desktop, or mobile (off also returns the OS to web).',
     build: ({ flags, positionals }) => {
       let raw = String(flags.mode ?? flags.value ?? positionals[0] ?? '').trim().toLowerCase();
-      if (raw !== 'off' && raw !== 'desktop' && raw !== 'mobile') {
+      if (!['off', 'desktop', 'mobile'].includes(raw)) {
         throw new Error('Specify off, desktop, or mobile (e.g. wf set-platform-preview desktop).');
       }
       return { name: 'setPlatformPreview', params: { mode: raw } };
@@ -261,6 +262,28 @@ let subcommands = {
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
       io.log(`Platform Preview: ${result.mode || 'off'}`);
+    },
+  },
+  'is-platform-os': {
+    description: 'Print IDE platform preview OS (web, win, nux, mac, or android).',
+    build: () => ({ name: 'isPlatformOs' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(result.os || 'web');
+    },
+  },
+  'set-platform-os': {
+    description: 'Set IDE platform preview OS: web (plain browser) or win, nux, mac, android (also enables native:* and a form factor).',
+    build: ({ flags, positionals }) => {
+      let raw = String(flags.os ?? flags.value ?? positionals[0] ?? '').trim().toLowerCase();
+      if (!['web', 'win', 'nux', 'mac', 'android'].includes(raw)) {
+        throw new Error('Specify web, win, nux, mac, or android (e.g. wf set-platform-os nux).');
+      }
+      return { name: 'setPlatformOs', params: { os: raw } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Platform OS: ${result.os || 'web'}`);
     },
   },
   'is-page-preview': {

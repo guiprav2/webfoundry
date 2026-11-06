@@ -13,6 +13,10 @@ const DEFAULTS = {
   documentClassNames: '',
 };
 
+// "Use system theme" per target: OS variants (nux:adw-* on Linux, …) apply in the
+// exported app. Android defaults to the web look (mobile:* still applies) for now.
+const SYSTEM_THEME_DEFAULTS = { 'linux-x64': true, 'win-x64': true, 'android-arm64': false };
+
 function normalizeResizable(value) {
   let mode = String(value ?? DEFAULTS.resizable).trim().toLowerCase();
   return RESIZABLE_MODES.has(mode) ? mode : DEFAULTS.resizable;
@@ -60,6 +64,10 @@ class NativeExportDialog {
     }
     // Stable array identity — a getter that returns a fresh array each read
     // makes Dominant wf-map thrash and can freeze/crash the tab.
+    this.systemThemeByTarget = {};
+    for (let id of Object.keys(SYSTEM_THEME_DEFAULTS)) {
+      this.systemThemeByTarget[id] = typeof saved.systemTheme?.[id] === 'boolean' ? saved.systemTheme[id] : SYSTEM_THEME_DEFAULTS[id];
+    }
     this.targets = [
       { id: 'linux-x64', label: 'Linux x64', available: true },
       { id: 'win-x64', label: 'Windows x64 (coming soon)', available: false },
@@ -76,6 +84,14 @@ class NativeExportDialog {
 
   set documentClassNames(value) {
     this.classNamesByTarget[this.target] = value;
+  }
+
+  get systemTheme() {
+    return !!this.systemThemeByTarget[this.target];
+  }
+
+  set systemTheme(value) {
+    this.systemThemeByTarget[this.target] = !!value;
   }
 
   get isAndroid() {
@@ -114,6 +130,7 @@ class NativeExportDialog {
           target: this.target,
           orientation: normalizeOrientation(this.orientation),
           documentClassNames: normalizeClassNames(this.documentClassNames),
+          systemTheme: this.systemTheme,
         }
       : {
           target: this.target,
@@ -125,6 +142,7 @@ class NativeExportDialog {
           dragAnywhere: !!this.dragAnywhere,
           resizable: normalizeResizable(this.resizable),
           documentClassNames: normalizeClassNames(this.documentClassNames),
+          systemTheme: this.systemTheme,
         };
     // Persist every target's settings (not just the chosen one's) so switching targets never drops the others.
     let classNames = {};
@@ -140,6 +158,7 @@ class NativeExportDialog {
       resizable: normalizeResizable(this.resizable),
       orientation: normalizeOrientation(this.orientation),
       documentClassNames: classNames,
+      systemTheme: { ...this.systemThemeByTarget },
     };
     try {
       await post('settings.projectOption', 'nativeExport', saved);

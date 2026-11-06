@@ -605,11 +605,113 @@
           </div>
         </div>
         <div class="p-8 flex flex-col items-center gap-6">
+          <div class="text-3xl">XAIKeyDialog</div>
+
+          <div
+            id="OpenAIKeyDialog"
+            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+          >
+            <form
+              method="dialog"
+              wf-onkeydown="this.onKeyDown(event)"
+              wf-onsubmit="this.onSubmit(event)"
+              class="flex flex-col gap-2.5"
+            >
+              <div class="">OpenAI API Key</div>
+              <div class="text-sm text-neutral-300">
+                Paste a secret key from platform.openai.com. It is stored
+                locally and never sent to Webfoundry servers.
+              </div>
+              <input
+                type="password"
+                placeholder="sk-shhh..."
+                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
+                value=""
+                wf-value="this.value"
+                wf-onattach="_1.focus()"
+              />
+              <div class="flex flex-wrap gap-2 justify-end items-center">
+                <button
+                  value=""
+                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
+                  wf-onclick="this.onRemove(event)"
+                  wf-if="this.props.key"
+                  type="button"
+                >
+                  Remove key</button
+                ><button
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  value="cancel"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  value="ok"
+                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
+                  wf-disabled="!this.valid"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+          <div
+            id="XAIKeyDialog"
+            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+          >
+            <form
+              method="dialog"
+              wf-onkeydown="this.onKeyDown(event)"
+              wf-onsubmit="this.onSubmit(event)"
+              class="flex flex-col gap-2.5"
+            >
+              <div class="">xAI API Key</div>
+              <div class="text-sm text-neutral-300">
+                Paste an API key from console.x.ai. It is stored locally and
+                never sent to Webfoundry servers.
+              </div>
+              <input
+                type="password"
+                placeholder="xai-shhh..."
+                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
+                value=""
+                wf-value="this.value"
+                wf-onattach="_1.focus()"
+              />
+              <div class="flex flex-wrap gap-2 justify-end items-center">
+                <button
+                  value=""
+                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
+                  wf-onclick="this.onRemove(event)"
+                  wf-if="this.props.key"
+                  type="button"
+                >
+                  Remove key</button
+                ><button
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  value="cancel"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  value="ok"
+                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
+                  wf-disabled="!this.valid"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="p-8 flex flex-col items-center gap-6">
           <div class="text-3xl">NetlifyDeployDialog</div>
 
           <div
             id="NetlifyDeployDialog"
-            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+            class="outline-none rounded-lg shadow-xl text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md w-96 min-w-min"
           >
             <form
               method="dialog"
@@ -701,18 +803,18 @@
               <div class="flex gap-2 justify-end">
                 <button
                   value="cancel"
-                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm whitespace-nowrap"
                 >
                   Cancel</button
                 ><button
                   value="key"
-                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm whitespace-nowrap"
                 >
                   Change API Key
                 </button>
                 <button
                   value=""
-                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm whitespace-nowrap"
                   wf-onclick="this.retry()"
                   wf-if="this.error"
                   type="button"
@@ -720,7 +822,7 @@
                   Retry</button
                 ><button
                   value="ok"
-                  class="rounded px-4 py-2 bg-[#0071b2] hover:bg-[#008ad9] outline-none text-sm disabled:opacity-50"
+                  class="rounded px-4 py-2 bg-[#0071b2] hover:bg-[#008ad9] outline-none text-sm disabled:opacity-50 whitespace-nowrap"
                   wf-disabled="!this.valid"
                 >
                   Deploy
@@ -869,6 +971,15 @@
                 </label>
               </div>
               <label
+                class="mb-3 flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[#121d2b] cursor-pointer text-sm"
+                title="Apply OS-specific classes (e.g. nux:adw-* on Linux). Unchecked, the app renders like the web preview."
+                ><input
+                  type="checkbox"
+                  class="accent-[#2a9df4]"
+                  value="on"
+                  wf-checked="this.systemTheme"
+                /><span>Use system theme</span></label
+              ><label
                 class="mb-3 flex flex-col gap-1 text-xs text-neutral-400 px-0.5"
               >
                 Document class names

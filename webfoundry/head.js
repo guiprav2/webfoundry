@@ -98,8 +98,68 @@
     let nativeVariant = document.createElement('style');
     nativeVariant.type = 'text/tailwindcss';
     nativeVariant.className = 'wf-native-variant';
-    nativeVariant.textContent = '@custom-variant native (&:where(html[wf-native-preview] *));\n';
+    nativeVariant.textContent = '@custom-variant native (&:is(html:where([wf-native-preview]) *));\n';
     document.head.append(nativeVariant);
+
+    // desktop:/mobile: and the OS variants win:/nux:/mac:/android: follow the same
+    // html preview attributes (IDE Platform Preview); Nasty resolves them natively.
+    // Each is a condition on the element itself so variants stack (nux:mobile:…).
+    if (!document.querySelector('style.wf-platform-variants')) {
+      let platformVariants = document.createElement('style');
+      platformVariants.type = 'text/tailwindcss';
+      platformVariants.className = 'wf-platform-variants';
+      platformVariants.textContent = [
+        '@custom-variant native (&:is(html:where([wf-native-preview]) *));',
+        '@custom-variant desktop (&:is(html[wf-desktop-preview] *));',
+        '@custom-variant mobile (&:is(html[wf-mobile-preview] *));',
+        '@custom-variant win (&:is(html[wf-win-preview] *));',
+        '@custom-variant nux (&:is(html[wf-nux-preview] *));',
+        '@custom-variant mac (&:is(html[wf-mac-preview] *));',
+        '@custom-variant android (&:is(html[wf-android-preview] *));',
+        '',
+      ].join('\n');
+      document.head.append(platformVariants);
+    }
+
+    // Adwaita adw-* utilities (generated from adwaita-web): Tailwind @utility
+    // blocks, so every variant composes (md:adw-button, mobile:adw-card, …).
+    try {
+      let res = await fetch(`${prefix}webfoundry/adwaita.tw.css`);
+      if (res.ok) {
+        let adwaita = document.createElement('style');
+        adwaita.type = 'text/tailwindcss';
+        adwaita.className = 'wf-adwaita';
+        adwaita.textContent = await res.text();
+        document.head.append(adwaita);
+      }
+    } catch (err) {
+      console.warn('Adwaita utilities unavailable:', err);
+    }
+
+    // Symbolic icons (adw-icon-*) are plain CSS with inlined SVGs; only load
+    // them once a page actually uses one.
+    let iconRe = /(?:^|\s)(?:[\w-]+:)*adw-icon-[\w-]+/;
+    let iconObserver;
+    let loadIcons = () => {
+      if (document.querySelector('link.wf-adwaita-icons')) return;
+      iconObserver?.disconnect();
+      let link = document.createElement('link');
+      link.className = 'wf-adwaita-icons';
+      link.rel = 'stylesheet';
+      link.href = `${prefix}webfoundry/adwaita-icons.css`;
+      document.head.append(link);
+    };
+    let usesIcons = el => iconRe.test(el.className?.baseVal ?? el.className ?? '') || !!el.querySelector?.('[class*="adw-icon-"]');
+    if (usesIcons(document.documentElement)) loadIcons();
+    else {
+      iconObserver = new MutationObserver(muts => {
+        for (let mut of muts) {
+          let nodes = mut.type === 'attributes' ? [mut.target] : [...mut.addedNodes].filter(x => x.nodeType === 1);
+          if (nodes.some(usesIcons)) return loadIcons();
+        }
+      });
+      iconObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+    }
 
     let script = document.createElement('script');
     script.className = 'wf-tw-script';

@@ -10,41 +10,59 @@ if (/^(\w+\.)?(webfoundry.app|webfoundry\d+\.netlify\.app|localhost)$/.test(wfor
 let post = data => parent.postMessage({ path: null, ...data, path: location.pathname.slice(1).split('/').slice(3).join('/') }, wforigin);
 let components = {};
 
-/** Ensure Tailwind sees native:/desktop:/mobile: even if the project's head.js is stale. */
+// Platform variants. Each is a condition on the element itself (`&:is(html[…] *)`)
+// so they stack (nux:mobile:hidden). :is() keeps specificity: OS > desktop|mobile > native > bare.
+let PLATFORM_VARIANTS_CSS = [
+  '@custom-variant native (&:is(html:where([wf-native-preview]) *));',
+  '@custom-variant desktop (&:is(html[wf-desktop-preview] *));',
+  '@custom-variant mobile (&:is(html[wf-mobile-preview] *));',
+  '@custom-variant win (&:is(html[wf-win-preview] *));',
+  '@custom-variant nux (&:is(html[wf-nux-preview] *));',
+  '@custom-variant mac (&:is(html[wf-mac-preview] *));',
+  '@custom-variant android (&:is(html[wf-android-preview] *));',
+  '',
+].join('\n');
+let PLATFORM_OSES = ['win', 'nux', 'mac', 'android'];
+
+/** Ensure Tailwind sees the platform variants even if the project's head.js is stale. */
 function ensurePlatformVariantStyles() {
-  if (document.querySelector('style.wf-platform-variants')) return;
-  let style = document.createElement('style');
-  style.type = 'text/tailwindcss';
-  style.className = 'wf-platform-variants';
-  style.textContent = [
-    '@custom-variant native (html:where([wf-native-preview]) &);',
-    '@custom-variant desktop (html[wf-desktop-preview] &);',
-    '@custom-variant mobile (html[wf-mobile-preview] &);',
-    '',
-  ].join('\n');
-  document.head.append(style);
+  let style = document.querySelector('style.wf-platform-variants');
+  if (style?.textContent === PLATFORM_VARIANTS_CSS) return;
+  if (!style) {
+    style = document.createElement('style');
+    style.type = 'text/tailwindcss';
+    style.className = 'wf-platform-variants';
+    document.head.append(style);
+  }
+  style.textContent = PLATFORM_VARIANTS_CSS;
 }
 
-/** Gate native:/desktop:/mobile: via html preview attributes. Parent posts (isolate is cross-origin). */
-function applyPlatformPreview(mode) {
+/**
+ * Gate platform variants via html preview attributes. `mode` is the form factor
+ * (off | desktop | mobile); `os` is web | win | nux | mac | android. Any form factor
+ * turns on native:; an OS adds its own attribute. Parent posts (isolate is cross-origin).
+ */
+function applyPlatformPreview(mode, os = 'web') {
   ensurePlatformVariantStyles();
   let root = document.documentElement;
-  root.removeAttribute('wf-desktop-preview');
-  root.removeAttribute('wf-mobile-preview');
-  root.removeAttribute('wf-native-preview');
-  if (mode === 'desktop') {
-    root.setAttribute('wf-desktop-preview', '');
-    root.setAttribute('wf-native-preview', '');
-  } else if (mode === 'mobile') {
-    root.setAttribute('wf-mobile-preview', '');
-    root.setAttribute('wf-native-preview', '');
-  }
+  for (let x of ['desktop', 'mobile', 'native', ...PLATFORM_OSES]) root.removeAttribute(`wf-${x}-preview`);
+  if (mode === 'off') return;
+  root.setAttribute('wf-native-preview', '');
+  root.setAttribute(`wf-${mode}-preview`, '');
+  if (PLATFORM_OSES.includes(os)) root.setAttribute(`wf-${os}-preview`, '');
 }
 
+// Legacy values: true (old native preview) and win/nux/mac (OS-as-mode) imply desktop.
 function normalizePlatformPreview(value) {
   if (value === 'desktop' || value === 'mobile') return value;
-  if (value === true || value === 'true') return 'desktop';
+  if (value === true || value === 'true' || PLATFORM_OSES.includes(value)) return 'desktop';
   return 'off';
+}
+
+function normalizePlatformOs(value, legacyMode) {
+  if (PLATFORM_OSES.includes(value)) return value;
+  if (PLATFORM_OSES.includes(legacyMode)) return legacyMode;
+  return 'web';
 }
 
 // Like el.scrollIntoView(), but only scrolls containers inside this document (ending at this
@@ -97,13 +115,13 @@ addEventListener('message', async ev => {
     };
     state.collab.uid === 'master' ? scroll() : setTimeout(scroll, 500);
   }
-  if ('platformPreview' in rest) applyPlatformPreview(normalizePlatformPreview(rest.platformPreview));
+  if ('platformPreview' in rest) applyPlatformPreview(normalizePlatformPreview(rest.platformPreview), normalizePlatformOs(rest.platformOs, rest.platformPreview));
   else if ('nativePreview' in rest) applyPlatformPreview(rest.nativePreview ? 'desktop' : 'off');
   Object.assign(state, rest);
 });
 addEventListener('message', async ev => {
   if (ev.data.type !== 'platformPreview' || ev.origin !== wforigin) return;
-  applyPlatformPreview(normalizePlatformPreview(ev.data.mode));
+  applyPlatformPreview(normalizePlatformPreview(ev.data.mode), normalizePlatformOs(ev.data.os, ev.data.mode));
 });
 addEventListener('message', async ev => {
   if (ev.data.type !== 'nativePreview' || ev.origin !== wforigin) return;

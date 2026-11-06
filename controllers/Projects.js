@@ -72,6 +72,8 @@ export default class Projects {
           'webfoundry/head.js',
           'webfoundry/dominant.js',
           'webfoundry/tailplay4.dafuq.js',
+          'webfoundry/adwaita.tw.css',
+          'webfoundry/adwaita-icons.css',
         ].map(async x => {
           let text = await (await fetch(x)).text();
           if (x === 'index.html') text = text.replace('<title>Webfoundry</title>', `<title>${esc(name)}</title>`);

@@ -23,7 +23,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 * When special editing DOM/HTML tools are available, prefer surgical changes like a visual editor user would do instead of selecting the root and changing its entire HTML: Select the inner elements that need replacement and either change their HTMLs one by one or delete them altogether. Change selections and create divs in just the right places before using change HTML on them. When simple class adding/removal/replacement are needed, prefer specialized tools for that instead of change HTML, especially for preparing wrappers for inner content (e.g. setting `flex justify-center items-center` on a container).
 * Event handler attributes are always e.g. wf-onclick="post('ctrl.action')". Not wf-on-click="...", not data-onclick="...", not even native onclick="...".
 * wf-\* attributes only apply where their native equivalents apply. E.g. wf-value is only valid for \<input>, \<textarea>, etc.
-* Before working on how a page looks with `native:` / `desktop:` / `mobile:` utilities on Nasty, always `wf set-platform-preview desktop` or `wf set-platform-preview mobile` as appropriate (either mode also activates `native:`). Afterward, leave platform preview on or `wf set-platform-preview off` based on context (see Styling → platform variants).
+* Before working on how a page looks with `native:` / `desktop:` / `mobile:` / OS (`win:` / `nux:` / `mac:` / `android:`) utilities on Nasty, always `wf set-platform-preview desktop` or `wf set-platform-preview mobile` as appropriate (either mode also activates `native:`), plus `wf set-platform-os <os>` for OS-specific looks. Afterward, leave platform preview on or `wf set-platform-preview off` based on context (see Styling → platform variants).
 * Put native-bundle branding under project `icons/` (`icon.png`, `icon-256.png`, optional `icons/android/…`). Do not invent other branding folder names.
 
 ---
@@ -150,28 +150,33 @@ Webfoundry registers composable Tailwind v4 variants named `native:`, `desktop:`
 
 Use **`native:`** for styles shared by all Nasty hosts. Use **`desktop:`** / **`mobile:`** only for host-specific overrides so you do not duplicate common native styles.
 
-**Precedence (same CSS property):** `desktop:` or `mobile:` (active host) beats `native:`, which beats bare utilities.
+OS variants **`win:`** (Windows), **`nux:`** (Linux), **`mac:`** (macOS), and **`android:`** narrow a style to one OS, e.g. `nux:adw-header-bar`, `android:rounded-none`. The OS is independent of the form factor, so stack them for combinations: `nux:mobile:hidden` (Linux phone), `nux:desktop:flex` (Linux desktop). Android is `android:`, never `nux:`.
+
+**Precedence (same CSS property):** `win:` / `nux:` / `mac:` / `android:` (active OS) beats `desktop:` or `mobile:` (active host), which beats `native:`, which beats bare utilities. Stacked variants (`nux:mobile:…`) beat single ones.
 
 **When they apply**
 
 * **Browser / IDE preview (default):** all three inert. The page looks like a normal web app.
 * **Browser with Desktop Preview on:** `native:` and `desktop:` apply; `mobile:` does not.
 * **Browser with Mobile Preview on:** `native:` and `mobile:` apply; `desktop:` does not.
-* **Exported Nasty / native bundle:** `native:` is always on. `desktop:` is on for desktop hosts; `mobile:` is on for Android.
+* **Browser with an OS selected (Windows / Linux / Android):** `native:`, the selected Desktop or Mobile mode, and that OS's variant apply.
+* **Exported Nasty / native bundle:** `native:` is always on. `desktop:` is on for desktop hosts; `mobile:` is on for Android. `win:` / `nux:` / `mac:` / `android:` follow the OS.
 
 Do not rewrite class lists for preview. Authored markup keeps the tokens; the host decides whether they take effect.
 
 **Platform Preview buttons (IDE)**
 
-* Labels: **Desktop Preview** and **Mobile Preview**.
+* A platform radiogroup of icons (**Web**, **Windows**, **Linux**, **Android**) followed by the **Desktop Preview** and **Mobile Preview** toggles.
 * Placement: designer chrome, immediately to the left of the refresh control on the page toolbar (same cluster as refresh / clone / delete).
-* Visibility: the buttons appear when the open page’s DOM mirror has at least one class token containing `native:`, `desktop:`, or `mobile:`.
-* Behavior: toggles a global IDE preference (`platformPreview`: `off` | `desktop` | `mobile`). Active mode sets `wf-desktop-preview` or `wf-mobile-preview` on the live preview iframe’s `<html>` (mutually exclusive) and always sets `wf-native-preview` with either mode so `native:` utilities apply too. Attributes are runtime-only and are not saved into project HTML.
+* Visibility: the controls appear when the open page’s DOM mirror has at least one class token containing `native:`, `desktop:`, `mobile:`, `win:`, `nux:`, `mac:`, or `android:`.
+* Behavior: two global IDE preferences. `platformOs` (`web` | `win` | `nux` | `mac` | `android`, the radiogroup) and `platformPreview` (`off` | `desktop` | `mobile`, the toggles). Web is the plain browser: selecting it turns Desktop/Mobile off. Selecting an OS turns on Desktop (Mobile for Android) if neither is on; turning Desktop/Mobile off returns to Web. Desktop/Mobile with Web selected is the generic native preview (no OS). Active modes set `wf-native-preview`, `wf-desktop-preview` or `wf-mobile-preview`, and `wf-<os>-preview` on the live preview iframe’s `<html>`. Attributes are runtime-only and are not saved into project HTML.
 
 **CLI (agents)**
 
 * `wf is-platform-preview` — prints `off`, `desktop`, or `mobile`.
-* `wf set-platform-preview off|desktop|mobile` — set platform preview (same preference as the toolbar buttons).
+* `wf set-platform-preview off|desktop|mobile` — set the form factor (same preference as the Desktop/Mobile toggles).
+* `wf is-platform-os` — prints `web`, `win`, `nux`, `mac`, or `android`.
+* `wf set-platform-os web|win|nux|mac|android` — set the OS (same preference as the platform radiogroup).
 
 **Agent workflow for platform looks**
 
@@ -188,6 +193,17 @@ Example:
 
 On the web with platform preview off, you get square corners and white text. With Desktop Preview on (or in a desktop Nasty export), corners round and text is pink. With Mobile Preview on (or on Android), corners round and text is sky.
 
+### Adwaita `adw-*` classes
+
+Webfoundry ships the GNOME Adwaita styles from adwaita-web as `adw-*` utility classes (every upstream class is `adw-` prefixed: `adw-button`, `adw-card`, `adw-suggested-action`, `adw-title-1`, `adw-boxed-list`, …). They are Tailwind utilities, so any variant composes: `md:adw-card`, `mobile:adw-button`, `nux:adw-headerbar`, `hover:adw-dimmed`.
+
+* Combine component classes with their modifiers exactly like upstream: `<button class="adw-button adw-suggested-action">`, `<button class="adw-button adw-flat adw-circular">`. Child rules (e.g. `.adw-icon` inside `.adw-button`) follow from the markup.
+* Platform-scoped: prefix only the component classes (`nux:adw-button adw-suggested-action`). Modifier/marker classes (`adw-suggested-action`, `adw-flat`, `adw-circular`, `adw-pill`, `adw-header-bar-title`, …) have no styles of their own and only act where the component class is active, so leave them unprefixed.
+* Page base: `adw-page` (upstream `body` rule: font, spacing), `adw-background` (window background and text color); element styles as `adw-h1`…`adw-h6`, `adw-p`, `adw-a`, `adw-hr`, `adw-all` (the `*` reset).
+* Themes: add `adw-theme-dark` to `<html>` (on Nasty: to `<body>`) for the dark theme; accents via `adw-accent-blue|teal|green|yellow|orange|red|pink|purple|slate` on `<html>` (web only).
+* Symbolic icons: `adw-icon-<name>-symbolic` (e.g. `adw-icon-go-next-symbolic`), drawn with `background-color: currentColor` through a mask; size them with the element (e.g. `size-4 inline-block`). Web only.
+* Nasty supports the subset Nasty can express: base styles, `hover:`/`active:`, class/attribute/structural modifiers, descendant/child rules, `max-md`, and dark. Focus rings, `:not()`, pseudo-elements, masks/icons, accents and vendor properties are web-only.
+
 ### Native export
 
 * Settings → **Export native app** builds a native bundle for the open project.
@@ -200,19 +216,83 @@ On the web with platform preview off, you get square corners and white text. Wit
 
 These bindings exist **only in exported Nasty / native bundles**. They are not available in the ordinary browser IDE preview. Node ESM has no browser `window` scope; the native adapter injects live imports so the same unqualified names work as in the browser (`state`, `post`, `document`, `window`, …). Prefer bare names; `window.X = …` also updates those live bindings.
 
-**Always injected (shim / WF):** `window`, `document`, `state`, `post`, `d`, `rawctrls`, `showModal`, `selectFile`, `renderComponent`, `renderTemplate`, `wfeval`, `arrayify`, `tap`, `anime`, `triggerRouterError`, `localStorage`, `sessionStorage`, `location`, `history`, `fetch`, `navigator`, `rootPrefix`, `Node`, `Element`, `HTMLElement`, `Text`, `Comment`, `Document`, `Attr`, `MutationObserver`, `ResizeObserver`, and bare `addEventListener` / `removeEventListener` / `dispatchEvent` / `requestAnimationFrame` / `cancelAnimationFrame` (forwarded to the host window). Bare `scrollTo` is a no-op; bare `alert` throws `Not implemented`.
+**Always injected (shim / WF):** `window`, `document`, `state`, `post`, `d`, `rawctrls`, `showModal`, `selectFile`, `renderComponent`, `renderTemplate`, `wfeval`, `arrayify`, `tap`, `anime`, `triggerRouterError`, `localStorage`, `sessionStorage`, `location`, `history`, `fetch`, `navigator`, `rootPrefix`, `bundleName` (the bundle's file name, e.g. `counter-x86_64.AppImage` or `counter.apk`; also `window.bundleName`; undefined on the web, so test with `typeof bundleName === 'undefined'`), `Node`, `Element`, `HTMLElement`, `Text`, `Comment`, `Document`, `Attr`, `MutationObserver`, `ResizeObserver`, and bare `addEventListener` / `removeEventListener` / `dispatchEvent` / `requestAnimationFrame` / `cancelAnimationFrame` (forwarded to the host window). Bare `scrollTo` is a no-op; bare `alert` throws `Not implemented`.
 
-**Host `window` (Nasty Window) — non-web extras apps may use:**
+The host `window` also exposes non-standard Nasty APIs; see **Native apps using Nasty** below.
 
-* Geometry / chrome: `title`, `width`, `height`, `resizable`, `orientation`, `borderless`, `dragAnywhere`, `maximizable`, `maximized`, `vsync`, `closed`, `close()`
-* Paths: `appId`, `userDataPath`, `cachePath`
-* Pickers: `showDirectoryPicker(options?)`, `showOpenFilePicker(options?)`
-* Audio: `audioOutputs`, `audioOutput`
-* Timing / events: `requestAnimationFrame`, `cancelAnimationFrame`, `addEventListener`, `removeEventListener`, `dispatchEvent`, `drainEvents()`
-* DOM attachment: `document` (get/set), `navigator`, `Image`
-* Optional capture helpers: `captureFrame`, `copyFrame`
+---
 
-Do **not** call frame presentation APIs (`present`, `presentDocument`, `presentWithImages`, `presentOrdered`, `presentTransformed`); Nasty presents attached documents itself. Build UI with standard DOM + Tailwind / `native:` / `desktop:` / `mobile:` classes.
+## 📱 Native apps using Nasty
+
+Exported native bundles run on Nasty, not a browser. `window` is a Nasty `Window`: it supports the usual DOM-facing members and adds the non-standard APIs below. **None of these exist in the browser IDE preview.** Guard any use with a feature check (e.g. `'userDataPath' in window`, `typeof window.captureFrame === 'function'`) so pages still work on the web.
+
+Initial values come from the project's Native export settings (baked into `nasty-window.json`). Changing them at runtime from a controller is fine.
+
+### Window chrome and geometry
+
+| API | Type | Notes |
+|-----|------|-------|
+| `window.title` | `string` (get/set) | Host window title. Prefer `<title>` / `document.title` once the page is attached. |
+| `window.width` / `window.height` | `number` or `'Npx'` / `'N%'` (get/set) | Requested size. Numbers are px; `%` is relative to the display. Non-negative only. |
+| `window.size()` | `() => { width, height }` | Actual current window size in px (differs from `width`/`height` after user resizes or maximizes). |
+| `window.devicePixelRatio()` | `() => number` | **A method, not a property** (unlike the web). Device px per CSS px. |
+| `window.resizable` | `'both' \| 'horizontal' \| 'vertical' \| 'none'` (get/set) | Which axes the user may resize. |
+| `window.orientation` | `'auto' \| 'portrait' \| 'landscape'` (get/set) | Android screen orientation lock. Not the deprecated web `window.orientation` number. |
+| `window.borderless` | `boolean` (get/set) | Removes OS decorations (title bar, frame). Pair with `dragAnywhere` or your own drag area. |
+| `window.dragAnywhere` | `boolean \| string` (get/set) | `true`: pressing on any non-interactive spot drags the window. A key name (e.g. `'Alt'`): drag only while holding it. Elements with click listeners, scrollable areas, `contenteditable`, interactive ARIA roles, and fullscreen content never start a drag. |
+| `window.maximizable` | `boolean` (get/set) | Enables double-click-to-maximize on drag areas. Defaults to `false`; throws if the body's `max-width`/`max-height` would forbid maximizing. |
+| `window.maximized` | `boolean` (get/set) | Read or toggle maximized state. |
+| `window.vsync` | `boolean` (get/set) | Present in sync with the display refresh (default `true`). |
+| `window.closed` | `boolean` (get) | `true` once the window is closed. |
+| `window.close()` | `() => void` | Closes the window and ends the app. |
+
+### App data paths
+
+| API | Type | Notes |
+|-----|------|-------|
+| `window.appId` | `string \| null` | The app's id. |
+| `window.userDataPath` | `string \| null` | Absolute app data directory (`$HOME/.<appId>` by default). Persist app files here with Node `fs`. Nasty itself stores remembered window geometry in `window.json` there. |
+| `window.cachePath` | `string \| null` | Absolute cache directory (`<userDataPath>/cache`). Nasty caches downloaded Google Fonts under `fonts/`. |
+
+`localStorage` / `sessionStorage` are in-memory shims in native apps and do not survive restarts; write files under `userDataPath` for real persistence.
+
+### File pickers
+
+Both follow the web File System Access API shape and **reject with an `AbortError` `DOMException` on cancel**.
+
+* `await window.showOpenFilePicker({ multiple?, types?, excludeAcceptAllOption?, startIn?, id? })` → array of `FileSystemFileHandle`. `handle.getFile()` returns a standard `File`.
+* `await window.showDirectoryPicker({ mode?, startIn?, id? })` → `FileSystemDirectoryHandle`. Its file-access methods are **not implemented**; use `handle.path` with Node `fs` (or a watcher such as chokidar) instead.
+* Nasty extension: every handle has **`handle.path`**, the absolute filesystem path. `startIn` accepts a handle or a path string; `id` remembers the last folder per id.
+* `queryPermission()` / `requestPermission()` always resolve `'granted'`.
+
+### Audio output
+
+* `window.audioOutputs` → `[{ id, name, description, isDefault, sampleRate, … }]` (refreshed at most once per second).
+* `window.audioOutput` (get/set) → current output device `id`; set to an `id` from `audioOutputs`, or `null` for the system default. Throws `RangeError` for an unknown id. Playing `<video>` audio moves to the new device.
+
+### Frame capture
+
+* `await window.captureFrame(path?, { element?, rect? })` captures the next presented frame. With a `path`, writes a PNG there; with `null`, copies the image to the system clipboard. `element` limits it to that element's on-screen box; `rect` (`{ x, y, width, height }` in CSS px) to any region.
+* `await window.copyFrame({ element?, rect? })` is shorthand for `captureFrame(null, …)`.
+* Both reject with `AbortError` if the window closes first.
+
+### Animations
+
+* `window.registerKeyframes(name, [{ offset, class }, …])` registers keyframes for Tailwind `animate-[name_duration_…]` classes, with each frame given as Tailwind classes. Register before creating elements that use `name`.
+
+### Window events
+
+`window.addEventListener` receives host events besides the usual DOM ones:
+
+* `close`: the window is closing (user or `close()`). Flush state to disk here.
+* `resize`: the window size changed; read `window.size()`.
+* `maximize`: maximized state changed; read `window.maximized`.
+
+### Do not call
+
+* `window.drainEvents()`: Nasty already polls and routes native events; draining them yourself loses clicks and scrolling.
+* Frame presentation APIs (`present`, `presentDocument`, `presentWithImages`, `presentOrdered`, `presentTransformed`): Nasty presents the attached document itself.
+* `window.document = …`: the Webfoundry boot attaches the page document; build UI with standard DOM + Tailwind / `native:` / `desktop:` / `mobile:` classes.
 
 ---
 
@@ -274,7 +354,8 @@ Codex CLI exposes a `wf` command that talks to the local Companion server. Comma
 * `wf set-form-method --method post`
 * `wf toggle-hidden`
 * `wf is-platform-preview` – print `off` / `desktop` / `mobile` for IDE platform preview
-* `wf set-platform-preview off|desktop|mobile` – set platform preview (enable before working on `native:` / `desktop:` / `mobile:` looks; either on-mode also activates `native:`; restore or leave on based on context afterward)
+* `wf set-platform-preview off|desktop|mobile` – set platform preview form factor (enable before working on `native:` / `desktop:` / `mobile:` looks; either on-mode also activates `native:`; restore or leave on based on context afterward)
+* `wf is-platform-os` / `wf set-platform-os web|win|nux|mac|android` – read/set the previewed OS for `win:` / `nux:` / `mac:` / `android:` looks
 * `wf is-page-preview` – print the open page's mode: `preview` (the page runs live, as users see it) or `edit` (visual editor)
 * `wf set-page-preview preview|edit|toggle` – switch the open page between preview and edit modes (same as the editor's Preview button)
 

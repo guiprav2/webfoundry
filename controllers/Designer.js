@@ -12,6 +12,28 @@ let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emera
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
 let TEXT_COLOR_RE = new RegExp(`^text-(${TAILWIND_HUES.join('|')})-(${TAILWIND_SHADES.join('|')})$`);
 let BG_COLOR_RE = new RegExp(`^bg-(${TAILWIND_HUES.join('|')})-(${TAILWIND_SHADES.join('|')})$`);
+// Platform Preview = form factor (off | desktop | mobile) × OS (web | win | nux | mac | android).
+let PLATFORM_OSES = ['win', 'nux', 'mac', 'android'];
+// Variants are conditions on the element itself so they stack (nux:mobile:…);
+// :is() keeps specificity: OS > desktop|mobile > native > bare.
+let PLATFORM_VARIANTS_CSS = [
+  '@custom-variant native (&:is(html:where([wf-native-preview]) *));',
+  '@custom-variant desktop (&:is(html[wf-desktop-preview] *));',
+  '@custom-variant mobile (&:is(html[wf-mobile-preview] *));',
+  ...PLATFORM_OSES.map(os => `@custom-variant ${os} (&:is(html[wf-${os}-preview] *));`),
+  '',
+].join('\n');
+// Earlier builds stored desktop OSes in platformPreview itself (win/nux/mac ⇒ desktop).
+let platformForm = () => {
+  let mode = state.settings.opt.platformPreview;
+  if (mode === 'desktop' || mode === 'mobile') return mode;
+  return PLATFORM_OSES.includes(mode) ? 'desktop' : 'off';
+};
+let platformOs = () => {
+  let os = state.settings.opt.platformOs;
+  if (PLATFORM_OSES.includes(os)) return os;
+  return PLATFORM_OSES.includes(state.settings.opt.platformPreview) ? state.settings.opt.platformPreview : 'web';
+};
 
 let parseHueArgs = (args, fallbackCur) => {
   if (!args.length) return { cur: fallbackCur, hue: null };
@@ -68,6 +90,9 @@ export default class Designer {
     frameHeight: '100%',
     clipboards: {},
 
+    // Rendered size of the single selected element ("300x200"), measured inside the page iframe.
+    selSize: null,
+
     get tagLabel() {
       let s = this.current.cursors[state.collab.uid];
       if (s?.length !== 1) return 'Tag';
@@ -91,14 +116,18 @@ export default class Designer {
       for (let s of ss) for (let cls of s.classList) { let match = cls.match(BG_COLOR_RE); if (match) return match[1] }
     },
 
-    // True when the htmlsnap mirror has native:*, desktop:*, or mobile:* —
-    // drives Desktop/Mobile Preview controls next to refresh.
+    // True when the htmlsnap mirror has native:*, desktop:*, mobile:*, or OS (win/nux/mac/android) variants —
+    // drives the platform radiogroup and Desktop/Mobile Preview controls next to refresh.
+    // Normalized Platform Preview for toolbar bindings (legacy values folded in).
+    get platformOs() { return platformOs() },
+    get platformForm() { return platformForm() },
+
     get hasPlatformClasses() {
       let doc = this.current?.doc;
       if (!doc) return false;
       for (let el of doc.querySelectorAll('[class]')) {
         for (let cls of el.classList) {
-          if (/(?:^|:)(?:native|desktop|mobile):/.test(cls)) return true;
+          if (/(?:^|:)(?:native|desktop|mobile|win|nux|mac|android):/.test(cls)) return true;
         }
       }
       return false;
@@ -106,6 +135,39 @@ export default class Designer {
   };
 
   actions = {
+    measureSelection: async () => {
+      let frame = this.state.current;
+      let s = frame?.cursors?.[state.collab.uid];
+      let size = null;
+      if (frame?.ready && !frame.preview && s?.length === 1 && frame.el?.contentWindow && !document.hidden) {
+        if (frame.measuring) return;
+        frame.measuring = true;
+        try {
+          // Plain 'eval' message so it also works with older per-project copies of ifdesigner.js.
+          let origin = new URL(frame.el.src).origin;
+          let rpcid = crypto.randomUUID();
+          size = await new Promise(resolve => {
+            let timer = setTimeout(() => done(null), 1000);
+            let done = x => { clearTimeout(timer); removeEventListener('message', listener); resolve(x) };
+            let listener = ev => ev.origin === origin && ev.data?.type === 'eval:res' && ev.data.rpcid === rpcid && done(ev.data.result ?? null);
+            addEventListener('message', listener);
+            frame.el.contentWindow.postMessage({ type: 'eval', rpcid, args: { id: s[0] }, fn: `
+              let el = state.map?.get?.(args.id);
+              if (!el?.getBoundingClientRect) return null;
+              let r = el.getBoundingClientRect();
+              return \`\${Math.round(r.width)}x\${Math.round(r.height)}\`;
+            ` }, origin);
+          });
+        } finally {
+          frame.measuring = false;
+        }
+        if (this.state.current !== frame) return;
+      }
+      if (this.state.selSize === size) return;
+      this.state.selSize = size;
+      d.update();
+    },
+
     init: async () => {
       let { bus } = state.event;
       {
@@ -120,6 +182,7 @@ export default class Designer {
         this.state.gfontsreg = idx;
       }
       bus.on('projects:select:ready', async () => await post('designer.reset'));
+      setInterval(() => this.actions.measureSelection().catch(() => {}), 250);
       bus.on('files:select:ready', async ({ path }) => await post('designer.select', path));
       bus.on('settings:projects:option:ready', async () => await post('designer.refresh'));
       bus.on('files:change', async ({ path }) => {
@@ -245,9 +308,8 @@ export default class Designer {
       collab: { uid: state.collab.uid, rtc: { presence: state.collab.rtc?.presence } },
       cursors: frame.cursors,
       // Re-apply after ready/htmlsnap; isolate iframes cannot use contentDocument.
-      platformPreview: state.settings.opt.platformPreview === 'desktop' || state.settings.opt.platformPreview === 'mobile'
-        ? state.settings.opt.platformPreview
-        : 'off',
+      platformPreview: platformForm(),
+      platformOs: platformOs(),
     }, new URL(frame.el.src).origin),
 
     resize: ev => {
@@ -413,42 +475,57 @@ export default class Designer {
     applyPlatformPreview: (frame = this.state.current) => {
       let win = frame?.el?.contentWindow;
       if (!win || !frame?.el?.src) return;
-      let mode = state.settings.opt.platformPreview;
-      if (mode !== 'desktop' && mode !== 'mobile') mode = 'off';
+      let mode = platformForm();
+      let os = platformOs();
       let origin = new URL(frame.el.src).origin;
-      let fn = `if (!document.querySelector('style.wf-platform-variants')) {
-  let s = document.createElement('style');
+      // Self-contained so it also works on projects whose head.js/ifdesigner.js are stale.
+      let fn = `let s = document.querySelector('style.wf-platform-variants');
+if (!s) {
+  s = document.createElement('style');
   s.type = 'text/tailwindcss';
   s.className = 'wf-platform-variants';
-  s.textContent = '@custom-variant native (html:where([wf-native-preview]) &);\\n@custom-variant desktop (html[wf-desktop-preview] &);\\n@custom-variant mobile (html[wf-mobile-preview] &);\\n';
   document.head.append(s);
 }
+if (s.textContent !== args.variants) s.textContent = args.variants;
 let root = document.documentElement;
-root.removeAttribute('wf-desktop-preview');
-root.removeAttribute('wf-mobile-preview');
-root.removeAttribute('wf-native-preview');
-if (args.mode === 'desktop') {
-  root.setAttribute('wf-desktop-preview', '');
+for (let x of ['desktop', 'mobile', 'native', ...args.oses]) root.removeAttribute('wf-' + x + '-preview');
+if (args.mode !== 'off') {
   root.setAttribute('wf-native-preview', '');
-} else if (args.mode === 'mobile') {
-  root.setAttribute('wf-mobile-preview', '');
-  root.setAttribute('wf-native-preview', '');
+  root.setAttribute('wf-' + args.mode + '-preview', '');
+  if (args.oses.includes(args.os)) root.setAttribute('wf-' + args.os + '-preview', '');
 }`;
-      win.postMessage({ type: 'eval', fn, rpcid: crypto.randomUUID(), args: { mode } }, origin);
-      win.postMessage({ type: 'platformPreview', mode }, origin);
+      win.postMessage({ type: 'eval', fn, rpcid: crypto.randomUUID(), args: { mode, os, oses: PLATFORM_OSES, variants: PLATFORM_VARIANTS_CSS } }, origin);
+      win.postMessage({ type: 'platformPreview', mode, os }, origin);
     },
 
+    // Form factor: off | desktop | mobile. Turning it off returns to plain Web.
     setPlatformPreview: async (mode) => {
-      if (mode !== 'desktop' && mode !== 'mobile' && mode !== 'off') {
+      if (PLATFORM_OSES.includes(mode)) return await post('designer.setPlatformOs', mode); // legacy OS-as-mode
+      if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
         throw new Error('platform preview mode must be desktop, mobile, or off');
       }
       await post('settings.option', 'platformPreview', mode);
+      if (mode === 'off' && platformOs() !== 'web') await post('settings.option', 'platformOs', 'web');
+      await post('designer.applyPlatformPreview');
+      d.update();
+    },
+
+    // OS radiogroup: web | win | nux | mac | android. Web is the plain browser (no
+    // platform variants); an OS needs a form factor, defaulting to mobile on Android.
+    setPlatformOs: async (os) => {
+      if (os !== 'web' && !PLATFORM_OSES.includes(os)) {
+        throw new Error('platform OS must be web, win, nux, mac, or android');
+      }
+      await post('settings.option', 'platformOs', os);
+      if (os === 'web') await post('settings.option', 'platformPreview', 'off');
+      else if (platformForm() === 'off') await post('settings.option', 'platformPreview', os === 'android' ? 'mobile' : 'desktop');
+      else if (platformForm() !== state.settings.opt.platformPreview) await post('settings.option', 'platformPreview', platformForm());
       await post('designer.applyPlatformPreview');
       d.update();
     },
 
     togglePlatformPreview: async (mode) => {
-      let next = state.settings.opt.platformPreview === mode ? 'off' : mode;
+      let next = platformForm() === mode ? 'off' : mode;
       await post('designer.setPlatformPreview', next);
     },
   };

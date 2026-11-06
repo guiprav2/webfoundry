@@ -7,19 +7,30 @@ class NetlifyDeploy {
   }
 
   async init() {
+    this.error = null;
     try {
-      const res = await fetch('https://api.netlify.com/api/v1/sites', {
+      let res = await fetch('https://api.netlify.com/api/v1/sites', {
         headers: { Authorization: `Bearer ${this.props.key}` }
       });
-      if (!res.ok) throw new Error('Failed to fetch sites');
+      if (!res.ok) {
+        let body = await res.json().catch(() => null);
+        throw new Error(body?.message || body?.error || `${res.status} ${res.statusText}`.trim());
+      }
       this.sites = await res.json();
       this.selected = this.props.id || 'new';
     } catch (err) {
       console.error('Error loading Netlify sites:', err);
+      this.error = err?.message || String(err);
     } finally {
       d.update();
     }
   }
+
+  retry = () => {
+    this.error = null;
+    d.update();
+    this.init();
+  };
 
   get valid() {
     return this.selected || this.newSiteName.trim();

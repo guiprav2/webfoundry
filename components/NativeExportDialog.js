@@ -50,9 +50,14 @@ class NativeExportDialog {
     this.dragAnywhere = saved.dragAnywhere ?? DEFAULTS.dragAnywhere;
     this.resizable = normalizeResizable(saved.resizable ?? DEFAULTS.resizable);
     this.orientation = normalizeOrientation(saved.orientation ?? DEFAULTS.orientation);
-    this.documentClassNames = normalizeClassNames(
-      saved.documentClassNames ?? DEFAULTS.documentClassNames,
-    );
+    // Document classes are stored per target: { 'linux-x64': '...', 'android-arm64': '...' }.
+    // Older configs stored a single string; apply it to every target.
+    let savedClasses = saved.documentClassNames;
+    this.classNamesByTarget = {};
+    for (let id of ['linux-x64', 'win-x64', 'android-arm64']) {
+      let v = typeof savedClasses === 'string' ? savedClasses : savedClasses?.[id];
+      this.classNamesByTarget[id] = normalizeClassNames(v ?? DEFAULTS.documentClassNames);
+    }
     // Stable array identity — a getter that returns a fresh array each read
     // makes Dominant wf-map thrash and can freeze/crash the tab.
     this.targets = [
@@ -63,6 +68,14 @@ class NativeExportDialog {
     if (!this.targets.some(t => t.id === this.target && t.available)) {
       this.target = 'linux-x64';
     }
+  }
+
+  get documentClassNames() {
+    return this.classNamesByTarget[this.target] ?? '';
+  }
+
+  set documentClassNames(value) {
+    this.classNamesByTarget[this.target] = value;
   }
 
   get isAndroid() {
@@ -113,8 +126,23 @@ class NativeExportDialog {
           resizable: normalizeResizable(this.resizable),
           documentClassNames: normalizeClassNames(this.documentClassNames),
         };
+    // Persist every target's settings (not just the chosen one's) so switching targets never drops the others.
+    let classNames = {};
+    for (let [id, v] of Object.entries(this.classNamesByTarget)) classNames[id] = normalizeClassNames(v);
+    let saved = {
+      target: this.target,
+      width: clampDim(this.width, DEFAULTS.width),
+      height: clampDim(this.height, DEFAULTS.height),
+      startMaximized: !!this.startMaximized,
+      rememberDimensions: !!this.rememberDimensions,
+      borderless: !!this.borderless,
+      dragAnywhere: !!this.dragAnywhere,
+      resizable: normalizeResizable(this.resizable),
+      orientation: normalizeOrientation(this.orientation),
+      documentClassNames: classNames,
+    };
     try {
-      await post('settings.projectOption', 'nativeExport', opts);
+      await post('settings.projectOption', 'nativeExport', saved);
     } catch (err) {
       console.error('Failed to save native export options', err);
     }

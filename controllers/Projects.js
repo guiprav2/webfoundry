@@ -1,7 +1,7 @@
 import rfiles from '../repos/rfiles.js';
 import rprojects from '../repos/rprojects.js';
 import { defaultHtml } from '../other/templates.js';
-import { esc } from '../other/util.js';
+import { DECORATION_FILE, esc } from '../other/util.js';
 
 export default class Projects {
   state = { list: [] };
@@ -44,10 +44,10 @@ export default class Projects {
         if (state.projects.list.find(x => x.split(':')[0] === name)) throw new Error(`Project already exists: ${name}`);
       } else {
         while (true) {
-          let [btn, val] = await showModal('PromptDialog', { title: 'Create project', placeholder: 'Project name', initialValue: name, allowEmpty: false, short: true });
+          let [btn, val] = await showModal('CreateProjectDialog');
           if (btn !== 'ok') return bus.emit('projects:create:cancel');
-          name = val;
-          if (state.projects.list.find(x => x.split(':')[0] === val)) { await showModal('InfoDialog', { title: `Project already exists.` }); continue }
+          name = val.name;
+          if (val.origin) opt.decoration = { origin: val.origin };
           break;
         }
       }
@@ -60,6 +60,17 @@ export default class Projects {
         opt.betterscroll ??= true;
         state.projects.list.push(project); // needed by rprojects.config
         await rprojects.config(project, opt);
+        // Decoration projects have no pages of their own: just the hooks and shared media.
+        if (opt.decoration) {
+          let { origin } = opt.decoration;
+          let model = { version: 1, origin, startPath: '/', hooks: [] };
+          await rfiles.save(project, DECORATION_FILE, new Blob([`${JSON.stringify(model, null, 2)}\n`], { type: 'application/json' }));
+          await rfiles.save(project, 'media/.keep', new Blob([''], { type: 'text/plain' }));
+          await rfiles.save(project, 'AGENTS.md', new Blob([await (await fetch('AGENTS.md')).text()], { type: 'text/markdown' }));
+          await rfiles.save(project, 'wf.config.js', new Blob([await (await fetch('webfoundry/wf.config.js')).text()], { type: 'text/javascript' }));
+          bus.emit('projects:create:ready', { project });
+          return project;
+        }
         await Promise.all(['controllers', 'components', 'media', 'pages'].map(async x => await rfiles.save(project, `${x}/.keep`, new Blob([''], { type: 'text/plain' }))));
         await Promise.all([
           'AGENTS.md',

@@ -7,7 +7,7 @@ import { execWfCommand } from '../controllers/Companion.js';
 // `.keep` file, including directories that also contain other files.
 let globOpts = { dot: false };
 
-export function createShell(fs) {
+export function createShell(fs, { wfCursor = 'master', wfOptions } = {}) {
   let cwd = '';
 
   async function run(script) {
@@ -644,12 +644,12 @@ export function createShell(fs) {
   async function cmdWf(args) {
     let verbose = false;
     try {
-      let parsed = parseWfInvocation(args);
+      let parsed = parseWfInvocation(args, { defaultCur: wfCursor });
       verbose = parsed.verbose;
       if (parsed.help) return { code: parsed.code, stdout: parsed.stdout, stderr: parsed.stderr };
       let command = parsed.command;
       let payload = { name: command.name || parsed.subcmd, params: command.params || {} };
-      let result = await execWfCommand(payload);
+      let result = await execWfCommand(payload, wfOptions);
       return formatWfResult(parsed.spec, result, args);
     } catch (err) {
       let text = verbose || err?.verbose ? (err?.stack || err?.message || String(err)) : ((err && err.message) || String(err));

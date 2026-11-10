@@ -20,28 +20,51 @@ export default function server(key, opt = {}) {
     },
   };
 
-  const awaitWFResult = id => new Promise((resolve, reject) => {
+  const awaitWFResult = (id, ms) => new Promise((resolve, reject) => {
     let timeout = setTimeout(() => {
       pendingWF.delete(id);
       reject(new Error('Timed out waiting for Webfoundry response'));
-    }, 10000);
+    }, ms);
     pendingWF.set(id, { resolve, reject, timeout });
   });
 
-  ret.rpc('wf:invoke', async ({ ws, command, projectId }) => {
-    if (!projectId) throw new Error('projectId is required');
-    let callerMeta = socketMeta.get(ws) || {};
-    if (callerMeta.projectId == null) socketMeta.set(ws, { ...callerMeta, kind: callerMeta.kind || 'cli', projectId });
-    else if (callerMeta.projectId !== projectId) throw new Error(`Client not registered for project ${projectId}`);
+  let instanceClients = () => [...ret.clients].filter(client => socketMeta.get(client)?.kind === 'webfoundry');
+  let describeInstance = client => {
+    let { instanceId, projectId, collab, origin } = socketMeta.get(client);
+    return { id: instanceId ?? null, project: projectId === 'default' ? null : projectId ?? null, collab: !!collab, origin: origin ?? null };
+  };
+  let describeInstances = clients => clients.map(describeInstance).map(x => `  ${x.id} (${x.project ?? 'no project'}${x.collab ? ', collab' : ''})`).join('\n');
 
-    let recipients = [...ret.clients].filter(client => client !== ws).filter(client => {
-      let meta = socketMeta.get(client);
-      return meta?.kind === 'webfoundry' && meta.projectId === projectId;
-    });
-    if (!recipients.length) throw new Error(`Webfoundry project not connected: ${projectId}`);
+  ret.rpc('wf:instances', () => instanceClients().map(describeInstance));
+
+  // Exactly one instance runs each command: sending it to several applied the edit once per tab.
+  function resolveInstance(instance, projectId) {
+    let clients = instanceClients();
+    if (instance) {
+      let matches = clients.filter(client => socketMeta.get(client).instanceId?.startsWith(instance));
+      if (!matches.length) throw new Error(`Webfoundry instance not connected: ${instance}`);
+      if (matches.length > 1) throw new Error(`Instance id ${instance} is ambiguous:\n${describeInstances(matches)}`);
+      let open = socketMeta.get(matches[0]).projectId;
+      if (projectId && open !== projectId) throw new Error(`Instance ${instance} has ${open === 'default' ? 'no project' : `project ${open}`} open, not ${projectId}. Switch with: wf open-project ${projectId} --instance ${instance}`);
+      return matches[0];
+    }
+    let matches = projectId ? clients.filter(client => socketMeta.get(client).projectId === projectId) : clients;
+    if (!matches.length) throw new Error(projectId ? `Webfoundry project not connected: ${projectId}` : `No Webfoundry instances connected.`);
+    if (matches.length > 1) throw new Error(`More than one Webfoundry instance matches. Pick one with --instance <id> or WF_INSTANCE:\n${describeInstances(matches)}`);
+    return matches[0];
+  }
+
+  ret.rpc('wf:invoke', async ({ ws, command, projectId, instance }) => {
+    if (!projectId && !instance && !command?.anyProject) throw new Error('projectId is required');
+    if (projectId) {
+      let callerMeta = socketMeta.get(ws) || {};
+      if (callerMeta.projectId == null) socketMeta.set(ws, { ...callerMeta, kind: callerMeta.kind || 'cli', projectId });
+      else if (callerMeta.projectId !== projectId) throw new Error(`Client not registered for project ${projectId}`);
+    }
+    let client = resolveInstance(instance, projectId);
     let id = crypto.randomUUID();
-    for (let client of recipients) client.send(JSON.stringify({ type: 'wf:invoke', id, command }));
-    return await awaitWFResult(id);
+    client.send(JSON.stringify({ type: 'wf:invoke', id, command }));
+    return await awaitWFResult(id, command?.params?.page || command?.name === 'createProject' ? 40000 : 10000); // Pages and new projects may take a while to load.
   });
 
   let wss = new WebSocket.WebSocketServer({ port: opt.port });
@@ -85,7 +108,7 @@ export default function server(key, opt = {}) {
       delete data.type;
       if (type === 'identify') {
         console.log('identify:', data);
-        socketMeta.set(ws, { kind: data.kind || 'unknown', projectId: data.projectId ?? null });
+        socketMeta.set(ws, { kind: data.kind || 'unknown', projectId: data.projectId ?? null, instanceId: data.instanceId, collab: data.collab, origin: data.origin });
         return;
       }
       if (type.startsWith('rpc:')) {

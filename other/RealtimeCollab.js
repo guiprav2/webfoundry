@@ -1,5 +1,5 @@
 import EventEmitter from 'https://esm.run/eventemitter2';
-import { joinRoom } from 'https://esm.run/trystero';
+import { joinRoom } from 'https://esm.run/trystero@0.24.0'; // 0.25 changed makeAction() to return an object.
 
 const COLORS = [
   'red-600', 'red-800', 'orange-600', 'orange-800', 'amber-600', 'amber-800',

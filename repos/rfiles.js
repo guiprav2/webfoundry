@@ -5,6 +5,7 @@ import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 
 class FilesRepository {
   async list(project) {
+    if (state.collab.uid !== 'master') return await post('collab.peerFile', 'list', project);
     let [name, uuid] = project.split(':');
     let storage = rprojects.storage(project);
     let list;
@@ -22,6 +23,7 @@ class FilesRepository {
   }
 
   async save(project, path, blob) {
+    if (state.collab.uid !== 'master') return await post('collab.peerFile', 'save', project, path, blob);
     let [name, uuid] = project.split(':');
     let storage = rprojects.storage(project);
     switch (storage) {
@@ -38,6 +40,7 @@ class FilesRepository {
   }
 
   async load(project, path) {
+    if (state.collab.uid !== 'master') return await post('collab.peerFile', 'load', project, path);
     let [name, uuid] = project.split(':');
     let storage = rprojects.storage(project);
     switch (storage) {
@@ -48,6 +51,7 @@ class FilesRepository {
   }
 
   async mv(project, path, newPath) {
+    if (state.collab.uid !== 'master') return await post('collab.peerFile', 'mv', project, path, newPath);
     let [name, uuid] = project.split(':');
     let storage = rprojects.storage(project);
     switch (storage) {
@@ -76,6 +80,7 @@ class FilesRepository {
   }
 
   async rm(project, path) {
+    if (state.collab.uid !== 'master') return await post('collab.peerFile', 'rm', project, path);
     let [name, uuid] = project.split(':');
     let storage = rprojects.storage(project);
     switch (storage) {
@@ -115,8 +120,67 @@ class FilesRepository {
       await lf.setItem(`webfoundry:projects:files:${uuid}:${x}`, unb64(await post('companion.rpc', 'files:load', { path: `${name}/${x}` }), mimeLookup(x)));
       await post('broadcast.publish', 'files:add', { path: `${name}/${x}` });
     }
+    await this.rmGit(project);
+    let entries = (await post('companion.rpc', 'files:gitEntries', { path: name })).map(x => ({ ...x, path: x.path.slice(name.length + 1) }));
+    for (let x of entries) {
+      if (x.dir) continue;
+      let blob = unb64(await post('companion.rpc', 'files:load', { path: `${name}/${x.path}` }));
+      if (blob) await lf.setItem(`webfoundry:projects:git:${uuid}:${x.path}`, blob);
+    }
+    await lf.setItem(`webfoundry:projects:gitmeta:${uuid}`, entries);
     await post('companion.rpc', 'files:rm', { path: `${name}/` });
     return true;
+  }
+
+  // Repository data lives outside the files namespace so list() consumers (file tree, LLM tools, collab, zip export) never see it.
+  async rmGit(project) {
+    let uuid = project.split(':')[1];
+    let prefix = `webfoundry:projects:git:${uuid}:`;
+    for (let k of (await lf.keys()).filter(x => x.startsWith(prefix))) await lf.removeItem(k);
+    await lf.removeItem(`webfoundry:projects:gitmeta:${uuid}`);
+  }
+
+  async pullGit(project) {
+    let [name, uuid] = project.split(':');
+    let entries = await lf.getItem(`webfoundry:projects:gitmeta:${uuid}`) || [];
+    for (let x of entries.filter(x => x.dir)) await post('companion.rpc', 'files:mkdir', { path: `${name}/${x.path}` });
+    for (let x of entries) {
+      if (x.dir) continue;
+      let blob = await lf.getItem(`webfoundry:projects:git:${uuid}:${x.path}`);
+      if (blob) await this.writeGitFile(`${name}/${x.path}`, blob, x.mode);
+    }
+    await this.rmGit(project);
+  }
+
+  // Chunked because packs can exceed the WebSocket payload limit.
+  async writeGitFile(path, blob, mode) {
+    let chunkSize = 32 * 1024 * 1024;
+    for (let i = 0; i === 0 || i < blob.size; i += chunkSize) {
+      let last = i + chunkSize >= blob.size;
+      await post('companion.rpc', 'files:save', { path, data: await b64(blob.slice(i, i + chunkSize)) ?? '', replace: i === 0, append: i > 0, mode: last ? mode : undefined });
+    }
+  }
+
+  // Stores a .git obtained outside the file system (git import). entries: [{ path: '.git/...', dir: true } | { path, blob }].
+  // Returns false without touching anything if the project already has a repository.
+  async importGit(project, entries) {
+    let [name, uuid] = project.split(':');
+    let storage = rprojects.storage(project);
+    switch (storage) {
+      case 'local': {
+        if ((await lf.getItem(`webfoundry:projects:gitmeta:${uuid}`))?.length) return false;
+        for (let x of entries) if (x.blob) await lf.setItem(`webfoundry:projects:git:${uuid}:${x.path}`, x.blob);
+        await lf.setItem(`webfoundry:projects:gitmeta:${uuid}`, entries.map(({ blob, ...x }) => x));
+        return true;
+      }
+      case 'cfs': {
+        if (await post('companion.rpc', 'files:stat', { path: `${name}/.git` })) return false;
+        for (let x of entries.filter(x => x.dir)) await post('companion.rpc', 'files:mkdir', { path: `${name}/${x.path}` });
+        for (let x of entries) if (x.blob) await this.writeGitFile(`${name}/${x.path}`, x.blob);
+        return true;
+      }
+      default: throw new Error(`Unknown project storage: ${storage}`);
+    }
   }
 
   async pull(project) {
@@ -129,6 +193,7 @@ class FilesRepository {
     let prefix = `webfoundry:projects:files:${uuid}:`;
     let fks = ks.filter(x => x.startsWith(prefix)).map(x => x.slice(prefix.length));
     for (let x of fks) await post('companion.rpc', 'files:save', { path: `${name}/${x}`, data: await b64(await lf.getItem(`webfoundry:projects:files:${uuid}:${x}`)) });
+    await this.pullGit(project);
     for (let x of fks) {
       await lf.removeItem(`webfoundry:projects:files:${uuid}:${x}`);
       await post('broadcast.publish', 'files:rm', { path: `${name}/${x}` });
@@ -149,9 +214,9 @@ function b64(blob) {
 function unb64(base64, type = '') {
   if (base64 == null) return null;
   let chars = atob(base64);
-  let nums = new Array(chars.length);
+  let nums = new Uint8Array(chars.length);
   for (let i = 0; i < chars.length; i++) nums[i] = chars.charCodeAt(i);
-  return new Blob([new Uint8Array(nums)], { type });
+  return new Blob([nums], { type });
 }
 
 export default new FilesRepository();

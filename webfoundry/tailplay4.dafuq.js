@@ -11586,12 +11586,15 @@
         if (!tailwindCompiler_inLhaq) return;
         let classCandidates_XUlLPG = new Set();
         performanceUtil_iFdJxH.start("Collect classes");
+        if (window.wfTailwindCandidates) {
+          for (let className_NJGbeT of window.wfTailwindCandidates()) currentClassSet_nHbxcQ.has(className_NJGbeT) || (currentClassSet_nHbxcQ.add(className_NJGbeT), classCandidates_XUlLPG.add(className_NJGbeT));
+        } else
         for (let el_sRULKr of document.querySelectorAll("[class]"))
         for (let className_NJGbeT of el_sRULKr.classList) currentClassSet_nHbxcQ.has(className_NJGbeT) || (currentClassSet_nHbxcQ.add(className_NJGbeT), classCandidates_XUlLPG.add(className_NJGbeT));
         performanceUtil_iFdJxH.end("Collect classes", { count: classCandidates_XUlLPG.size }),
         (0 !== classCandidates_XUlLPG.size || "incremental" !== mode_XIpkgj) && (
         performanceUtil_iFdJxH.start("Build utilities"),
-        outputStyleElement_faOivb.textContent = tailwindCompiler_inLhaq.build(Array.from(classCandidates_XUlLPG)),
+        outputStyleElement_faOivb.textContent = (window.wfTailwindTransform || (css => css))(tailwindCompiler_inLhaq.build(Array.from(classCandidates_XUlLPG))),
         performanceUtil_iFdJxH.end("Build utilities"));
       }(mode_BpFfSU),
       performanceUtil_iFdJxH.end("Build"),
@@ -11599,6 +11602,7 @@
     }).
     catch((error_zWXZdg) => performanceUtil_iFdJxH.error(error_zWXZdg));
   }
+  window.wfTailwindIdle = () => queuedBuildPromise_Gmxdmu;
   var tailwindStyleObserver_semHIu = new MutationObserver(() => queueTailwindBuild_ELDkRP("full"));
   function observeStyleElement_SaToTH(el_zuQOXo) {
     tailwindStyleObserver_semHIu.observe(el_zuQOXo, {

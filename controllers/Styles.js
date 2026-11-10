@@ -1,4 +1,5 @@
 import actions from '../other/actions.js';
+import { userAction } from '../other/shadowEditors.js';
 
 export default class Styles {
   state = {
@@ -17,8 +18,13 @@ export default class Styles {
         let pieces = [...attr.matchAll(/{{[\s\S]*?}}/g)].map(m => m[0]);
         wfclasses.push(...pieces);
       }
-      return [...(classes || []), ...wfclasses];
-    }
+      let list = [...(classes || []), ...wfclasses];
+      // Decoration projects: the site's read-only classes come first.
+      return state.decoration?.frame ? [...list.filter(this.readOnly), ...list.filter(x => !this.readOnly(x))] : list;
+    },
+
+    readOnly: x => !!state.decoration?.readOnlyClass(x),
+    get canAdd() { return state.decoration?.canAddClass ?? true },
   };
 
   actions = {
@@ -32,13 +38,13 @@ export default class Styles {
       ev.target.value = '';
     },
 
-    add: async cls => await actions.addCssClasses.handler({ cur: state.collab.uid, cls }),
-    rm: async cls => await actions.removeCssClasses.handler({ cur: state.collab.uid, cls }),
+    add: async cls => await userAction(() => actions.addCssClasses.handler({ cur: state.collab.uid, cls })),
+    rm: async cls => await userAction(() => actions.removeCssClasses.handler({ cur: state.collab.uid, cls })),
     edit: x => (this.state.replacing = x),
     replaceKeyDown: ev => ev.key === 'Enter' && ev.target.blur(),
 
     replaceBlur: async ev => {
-      await actions.replaceCssClasses.handler({ cur: state.collab.uid, old: this.state.replacing, cls: ev.target.value.trim() });
+      await userAction(() => actions.replaceCssClasses.handler({ cur: state.collab.uid, old: this.state.replacing, cls: ev.target.value.trim() }));
       this.state.replacing = null;
       ev.target.value = '';
     },

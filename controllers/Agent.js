@@ -1,10 +1,12 @@
 import { run } from '../other/kittygpt/core.js';
 import { keyImageData, parseKeyColor } from '../other/keypng.js';
-import { ensureOpenAIKey } from '../other/openai.js';
+import { ensureOpenAIKey, getOpenAIKey } from '../other/openai.js';
 import { createShell, formatResult } from '../other/shell.js';
 import { projectFs } from '../other/shellfs.js';
-import { ensureXAIKey } from '../other/xai.js';
+import { ensureXAIKey, getXAIKey } from '../other/xai.js';
 import rfiles from '../repos/rfiles.js';
+import { framePost, joinPath } from '../other/util.js';
+import { ensureFrame } from '../other/shadowEditors.js';
 
 let instructions = [
   'You are the Webfoundry agent. Reply in plain text.',
@@ -12,8 +14,9 @@ let instructions = [
   'Use the shell tool to read and change files in the open project. Paths are project-relative, and a leading / is the project root.',
   'Commands: pwd, cd, ls, cat, grep, sed, wc, mkdir, rm, mv, cp, echo, head, tail, find, touch, wf. The shell parses Bash, including pipes, && and ||, heredocs, and redirects on any part of a command. grep accepts the usual flags, including -n, -R, -I, and --include. sed -n \'10,40p\' prints a line range. Glob patterns expand.',
   'Every directory has a .keep file, including directories that already contain other files. Leave each .keep in place. Remove a directory with rm -r.',
-  'Change HTML with wf. wf select-file opens the page, wf read-html prints the snapshot, and each element carries a data-htmlsnap attribute. The attribute value is the snap id.',
-  'wf change-selection accepts only those snap ids, copied as bare values. Example: wf change-selection c11bf512f78e. Several ids may follow the subcommand.',
+  'Change HTML with wf. wf read-html --page pages/x.html prints a page snapshot, and each element carries a data-htmlsnap attribute. The attribute value is the snap id. Pass the same --page to wf edit commands.',
+  'Do not run wf select-file before reading or editing: it switches the page the user is looking at. Use it only to bring their attention to something, or when explicitly asked to.',
+  'Every wf HTML edit command requires --target with those snap ids, copied as bare values and comma-separated. Example: wf add-css-classes --target c11bf512f78e --classes flex.',
   'Writes to HTML files and to webfoundry/ are refused. cat can still read them.',
   'run_js executes inside the open page iframe. It throws when the visual editor is closed. Pass args as a map of parameter names to values and body as the function body, and return the value you want back.',
   'Sprites and UI frames that sit on another picture use a flat backdrop color. remove_background keys that exact color, so other greens in the subject stay, feathers the edge, and writes a PNG.',
@@ -24,36 +27,101 @@ export default class Agent {
     draft: '',
     busy: false,
     entries: [],
+
+    // Whether the sidebar offers the agent. Peers only ever learn this boolean; keys stay on the host.
+    get available() {
+      if (state.collab?.uid !== 'master') return !!state.collab?.agentAvailable;
+      return !!(state.settings?.opt?.codingAgent === 'xai' ? getXAIKey() : getOpenAIKey()).trim();
+    },
   };
 
-  logs = [];
-  shells = new Map();
+  session = { logs: [], shells: new Map(), wfCursor: 'builtin' };
+  peerSessions = new Map(); // Host: one conversation, shell and cursor per collaborator.
+  remote = null; // Peer: the prompt the host is answering.
 
-  shellFor() {
+  shellFor(session) {
     let project = state.projects.current;
     if (!project) throw new Error('No project is open');
-    let shell = this.shells.get(project);
+    let shell = session.shells.get(project);
     if (!shell) {
-      shell = createShell(projectFs());
-      this.shells.set(project, shell);
+      shell = createShell(projectFs(), { wfCursor: session.wfCursor, wfOptions: session.wfOptions });
+      session.shells.set(project, shell);
     }
     return shell;
   }
 
-  tools() {
+  // Runs one turn of a conversation on this host, which holds the API keys.
+  async turn(session, text, onDelta) {
+    session.logs.push({ type: 'message', role: 'user', content: [text] });
+    let xai = state.settings.opt?.codingAgent === 'xai';
+    let key = xai ? await ensureXAIKey() : await ensureOpenAIKey();
+    let streamed = false;
+    await run(session.logs, {
+      model: xai ? 'xai:grok-4.5' : 'oai:gpt-6-luna',
+      key,
+      stream: true,
+      instructions,
+      tools: this.tools(session),
+      text: (kind, chunk) => {
+        if (kind !== 'delta' || !chunk) return;
+        streamed = true;
+        onDelta(chunk);
+      },
+    });
+    if (streamed) return;
+    let last = [...session.logs].reverse().find(x => x.type === 'message' && x.role === 'assistant');
+    let parts = last && last.content || [];
+    let final = parts.filter(x => typeof x === 'string').join('');
+    if (final) onDelta(final);
+  }
+
+  peerSession(peer) {
+    let session = this.peerSessions.get(peer);
+    if (session) return session;
+    let collab = () => state.collab;
+    session = {
+      logs: [],
+      shells: new Map(),
+      busy: false,
+      wfCursor: `${peer}/agent:builtin`,
+      frame: () => state.designer.list.find(x => x.path === collab().peerPages[peer]) ?? state.designer.current,
+      wfOptions: {
+        peerAgent: {
+          page: () => collab().peerPages[peer] ?? null,
+          selectFile: async path => {
+            if (!state.files.list.some(x => joinPath(x[1] || '', x[0]) === path)) return { success: false, error: `Path does not exist: ${path}` };
+            if (path.endsWith('.html')) { await ensureFrame(path); collab().peerPages[peer] = path }
+            let target = collab().rtc?.presence?.find?.(x => x.user === peer)?.peerId;
+            await collab().rtc?.send?.({ type: 'agent:open', path }, target);
+            return { success: true, path };
+          },
+          createFile: async path => {
+            let parts = path.split('/');
+            let name = parts.pop();
+            let result = await post('files.create', parts.join('/'), name, 'file', { background: true });
+            return result?.success === false ? { success: false, error: result.reason } : { success: true, path };
+          },
+        },
+      },
+    };
+    this.peerSessions.set(peer, session);
+    return session;
+  }
+
+  tools(session) {
     return {
       shell: {
         description: 'Run a Bash-style shell command in the open project. Pipes, heredocs, and redirects are supported. Paths are project-relative. Every directory keeps a .keep file, even when other files are present; leave those in place. Change HTML with wf. wf change-selection takes data-htmlsnap id values from wf read-html, such as c11bf512f78e.',
         parameters: {
           type: 'object',
           properties: {
-            command: { type: 'string', description: 'Command to run, such as cat AGENTS.md, wf read-html, or wf change-selection <snap id>' },
+            command: { type: 'string', description: 'Command to run, such as cat AGENTS.md, wf read-html, or wf add-css-classes --target <snap id> --classes flex' },
           },
           required: ['command'],
         },
         handler: async ({ command }) => {
           try {
-            let result = await this.shellFor().run(String(command || ''));
+            let result = await this.shellFor(session).run(String(command || ''));
             return formatResult(result);
           } catch (err) {
             return (err && err.message) || String(err);
@@ -72,7 +140,7 @@ export default class Agent {
         },
         handler: async ({ args, body }) => {
           try {
-            return await runInPage(args, body);
+            return await runInPage(args, body, session.frame?.() ?? state.designer.current);
           } catch (err) {
             return (err && err.message) || String(err);
           }
@@ -112,28 +180,17 @@ export default class Agent {
       this.state.entries.push(assistant);
       d.update();
       this.stick();
-      this.logs.push({ type: 'message', role: 'user', content: [text] });
+      if (state.collab.uid !== 'master') {
+        let host = state.collab.rtc?.presence?.find?.(x => x.user === 'master')?.peerId;
+        this.remote = { id: crypto.randomUUID(), assistant };
+        return await state.collab.rtc.send({ type: 'agent:prompt', id: this.remote.id, text }, host);
+      }
       try {
-        let xai = state.settings.opt?.codingAgent === 'xai';
-        let key = xai ? await ensureXAIKey() : await ensureOpenAIKey();
-        await run(this.logs, {
-          model: xai ? 'xai:grok-4.5' : 'oai:gpt-6-luna',
-          key,
-          stream: true,
-          instructions,
-          tools: this.tools(),
-          text: (kind, chunk) => {
-            if (kind !== 'delta' || !chunk) return;
-            assistant.text += chunk;
-            d.updateSync();
-            this.stick();
-          },
+        await this.turn(this.session, text, chunk => {
+          assistant.text += chunk;
+          d.updateSync();
+          this.stick();
         });
-        if (!assistant.text) {
-          let last = [...this.logs].reverse().find(x => x.type === 'message' && x.role === 'assistant');
-          let parts = last && last.content || [];
-          assistant.text = parts.filter(x => typeof x === 'string').join('');
-        }
       } catch (err) {
         if (!assistant.text) assistant.text = (err && err.message) || String(err);
       } finally {
@@ -141,6 +198,61 @@ export default class Agent {
         d.update();
         this.stick();
       }
+    },
+
+    // Host: a collaborator prompted the agent. Output streams back to that collaborator only.
+    peerPrompt: async ({ peer, peerId, id, text }) => {
+      let rtc = state.collab.rtc;
+      let reply = (type, data) => rtc?.send?.({ type, id, ...data }, peerId);
+      if (!this.state.available) return await reply('agent:done', { error: `The host's agent isn't available.` });
+      if (typeof text !== 'string' || !text.trim() || text.length > 100000) return await reply('agent:done', { error: 'Invalid prompt.' });
+      let session = this.peerSession(peer);
+      if (session.busy) return await reply('agent:done', { error: 'Your previous prompt is still running.' });
+      session.busy = true;
+      let buffer = '';
+      let timer = null;
+      let flush = async () => {
+        clearTimeout(timer);
+        timer = null;
+        if (!buffer) return;
+        let chunk = buffer;
+        buffer = '';
+        await reply('agent:delta', { chunk });
+      };
+      try {
+        await this.turn(session, text, chunk => {
+          buffer += chunk;
+          timer ??= setTimeout(flush, 40);
+        });
+        await flush();
+        await reply('agent:done', {});
+      } catch (err) {
+        console.error(err);
+        await flush();
+        await reply('agent:done', { error: 'The agent failed on the host.' }); // Provider errors can quote the API key.
+      } finally {
+        session.busy = false;
+      }
+    },
+
+    prunePeers: () => {
+      for (let k of this.peerSessions.keys()) if (!state.collab.rtc?.presence?.find?.(x => x.user === k)) this.peerSessions.delete(k);
+    },
+
+    remoteDelta: ({ id, chunk }) => {
+      if (this.remote?.id !== id) return;
+      this.remote.assistant.text += chunk;
+      d.updateSync();
+      this.stick();
+    },
+
+    remoteDone: ({ id, error }) => {
+      if (!this.remote || (id && this.remote.id !== id)) return;
+      if (error && !this.remote.assistant.text) this.remote.assistant.text = error;
+      this.remote = null;
+      this.state.busy = false;
+      d.update();
+      this.stick();
     },
   };
 
@@ -178,15 +290,14 @@ function formatRunResult(packed) {
   return String(packed.v);
 }
 
-function runInPage(args, body) {
-  if (!state.designer?.open || !state.designer.current?.el) throw new Error('Visual editor is not open');
+function runInPage(args, body, frame) {
+  if (!frame?.ready || !frame.el) throw new Error('Visual editor is not open');
   if (typeof body !== 'string' || !body.trim()) throw new Error('run_js requires a body');
   let spec = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
   if (args != null && (typeof args !== 'object' || Array.isArray(args))) throw new Error('run_js args must be an object');
   for (let name of Object.keys(spec)) {
     if (!/^[A-Za-z_$][\w$]*$/.test(name)) throw new Error(`run_js parameter is not an identifier: ${name}`);
   }
-  let frame = state.designer.current;
   let iforigin = new URL(frame.el.src).origin;
   let rpcid = crypto.randomUUID();
   return new Promise((resolve, reject) => {
@@ -202,7 +313,7 @@ function runInPage(args, body) {
       else resolve(formatRunResult(ev.data.result));
     };
     addEventListener('message', listener);
-    frame.el.contentWindow.postMessage({ type: 'eval', fn: runJsBody, rpcid, args: { spec, body } }, iforigin);
+    framePost(frame, { type: 'eval', fn: runJsBody, rpcid, args: { spec, body } });
   });
 }
 

@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "Webfoundry Decorate",
+  "version": "0.1.0",
+  "description": "Lets Webfoundry Decoration projects load and decorate other sites inside the editor.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "decorate@webfoundry.app",
+      "strict_min_version": "147.0"
+    }
+  },
+  "permissions": ["webRequest", "webRequestBlocking", "<all_urls>"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://localhost/*",
+        "https://webfoundry.app/*",
+        "https://*.webfoundry.app/*",
+        "https://*.netlify.app/*"
+      ],
+      "js": ["editor-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["frame-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

@@ -46,6 +46,7 @@ export default class App {
       await post('codeEditor.init');
       await post('styles.init');
       await post('designer.init');
+      if (state.decoration) await post('decoration.init'); // Absent until scripts.json is next reflected.
       await post('assistant.init');
       await post('app.brandCanvasMonitor');
       (!this.state.demo && state.collab.uid === 'master' && !this.state.panel) && await post('app.selectPanel', 'projects');

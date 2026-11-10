@@ -88,6 +88,7 @@
           value=""
           wf-class="{{state.app.panel === 'agent' &amp;&amp; 'bg-black/70'}}"
           title="Agent"
+          wf-if="state.agent.available"
         ></button>
         <button
           class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 nf-oct-command_palette IconsSidebar-shellBtn"
@@ -100,7 +101,7 @@
           class="outline-none nf border-b border-black/50 transition-all hover:bg-black/70 w-12 md:w-16 h-12 md:h-16 IconsSidebar-playBtn nf-fa-play"
           wf-onclick="post('designer.togglePreview')"
           value=""
-          wf-if="state.designer.open &amp;&amp; state.files.current.startsWith('pages/') &amp;&amp; !state.designer.current?.preview"
+          wf-if="state.designer.open &amp;&amp; (state.files.current.startsWith('pages/') || state.designer.current?.decoration) &amp;&amp; !state.designer.current?.preview"
         ></button>
 
         <button
@@ -307,21 +308,31 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'createFirstChild')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('createFirstChild')"
                   >
                     <div>Inside</div>
                     <div
                       class="relative top-0.5 text-xs rounded w-5 h-5 flex justify-center items-center font-mono bg-[#0071b2]"
                     >
                       i
-                    </div>
+                    </div></button
+                  ><button
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
+                    wf-onclick="post('decoration.insert', 'ghost')"
+                    value=""
+                    wf-disabled="state.decoration.selected?.kind !== 'hooked'"
+                    wf-if="state.decoration?.frame"
+                  >
+                    <div>Ghost</div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'createLastChild')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('createLastChild')"
                   >
                     <div>Inside (last)</div>
                     <div
@@ -331,9 +342,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'createNextSibling')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('createNextSibling')"
                   >
                     <div>After</div>
                     <div
@@ -343,9 +355,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'createPrevSibling')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('createPrevSibling')"
                   >
                     <div>Before</div>
                     <div
@@ -355,9 +368,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'wrap')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('wrap')"
                   >
                     <div>Wrap</div>
                     <div
@@ -367,9 +381,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'unwrap')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('unwrap')"
                   >
                     <div>Unwrap</div>
                     <div
@@ -398,9 +413,10 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'pasteNextSibling')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('pasteNextSibling')"
                   >
                     <div>After</div>
                     <div
@@ -410,9 +426,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'pastePrevSibling')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('pastePrevSibling')"
                   >
                     <div>Before</div>
                     <div
@@ -422,9 +439,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'pasteLastChild')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('pasteLastChild')"
                   >
                     <div>Last Child</div>
                     <div
@@ -434,9 +452,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'pasteFirstChild')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('pasteFirstChild')"
                   >
                     <div>First Child</div>
                     <div
@@ -463,9 +482,10 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementId')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementId')"
                   >
                     <div>ID</div>
                     <div
@@ -475,9 +495,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     <div>Tag</div>
                     <div
@@ -487,9 +508,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeHtml')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeHtml')"
                   >
                     <div>HTML</div>
                     <div
@@ -499,9 +521,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeInnerHtml')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeInnerHtml')"
                   >
                     <div>Inner HTML</div>
                     <div
@@ -511,10 +534,11 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-if="state.designer.current.cursors[state.collab.uid]?.some?.(x =&gt; /^input|textarea$/.test(state.designer.current.map.get(x).tagName.toLowerCase()))"
                     wf-onclick="post('designer.toolbar', 'changeInputPlaceholder')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeInputPlaceholder')"
                   >
                     <div>Placeholder</div>
                     <div
@@ -524,10 +548,11 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-if="state.designer.current.cursors[state.collab.uid]?.some?.(x =&gt; state.designer.current.map.get(x).tagName === 'FORM')"
                     wf-onclick="post('designer.toolbar', 'setInputValue')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setInputValue')"
                   >
                     <div>Input Value</div>
                     <div
@@ -536,10 +561,11 @@
                       #
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeFormMethod')"
                     value=""
                     wf-if="state.designer.current.cursors[state.collab.uid]?.some?.(x =&gt; state.designer.current.map.get(x).tagName === 'FORM')"
+                    wf-disabled="state.decoration?.blocked('changeFormMethod')"
                   >
                     <div>Form Method</div>
                     <div
@@ -550,9 +576,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleHidden')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleHidden')"
                   >
                     <div>Toggle hidden</div>
                     <div
@@ -562,9 +589,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'normalizeStylesUnion')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('normalizeStylesUnion')"
                   >
                     <div>Normalize (union)</div>
                     <div
@@ -573,9 +601,10 @@
                       <div class="relative top-[1px]">u</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'normalizeStylesIntersect')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('normalizeStylesIntersect')"
                   >
                     <div>Normalize (intersect)</div>
                     <div
@@ -601,9 +630,10 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'replaceTextContent')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('replaceTextContent')"
                   >
                     <div>Single line</div>
                     <div
@@ -613,9 +643,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'replaceMultilineTextContent')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('replaceMultilineTextContent')"
                   >
                     <div>Multiline</div>
                     <div
@@ -625,9 +656,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeLinkUrl')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeLinkUrl')"
                   >
                     <div>Link URL</div>
                     <div
@@ -638,9 +670,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeMediaSrc')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeMediaSrc')"
                   >
                     <div>Media URL</div>
                     <div
@@ -651,9 +684,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeMediaFromGallery')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeMediaFromGallery')"
                   >
                     <div>Media Gallery</div>
                     <div
@@ -664,9 +698,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeBackgroundUrl')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeBackgroundUrl')"
                   >
                     <div>Background URL</div>
                     <div
@@ -677,9 +712,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeBackgroundFromGallery')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeBackgroundFromGallery')"
                   >
                     <div>Background Gallery</div>
                     <div
@@ -705,9 +741,10 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setIfExpression')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setIfExpression')"
                   >
                     <div>Conditional</div>
                     <div
@@ -717,9 +754,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setMapExpression')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setMapExpression')"
                   >
                     <div>Map</div>
                     <div
@@ -729,9 +767,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setEventHandlers')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setEventHandlers')"
                   >
                     <div>Event Handlers</div>
                     <div
@@ -742,9 +781,10 @@
                   </button>
 
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setDisabledExpression')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setDisabledExpression')"
                   >
                     <div>Disabled</div>
                     <div
@@ -770,242 +810,276 @@
                   wf-onclick="document.activeElement.blur()"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag')"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;custom&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'div' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;div&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'span' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;span&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'a' })"
                     }=""
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;a&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'p' })"
                     }=""
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;p&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'button' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;button&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'input' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;input&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'form' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;form&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'label' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;label&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'textarea' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;textarea&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'ul' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;ul&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'ol' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;ol&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'li' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;li&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'img' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;img&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'section' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;section&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'article' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;article&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'header' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;header&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'footer' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;footer&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'nav' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;nav&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'main' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;main&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h1' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h1&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h2' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h2&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h3' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h3&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h4' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h4&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h5' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h5&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'h6' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;h6&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'br' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;br&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'hr' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;hr&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'table' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;table&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'thead' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;thead&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'tbody' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;tbody&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'tr' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;tr&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'td' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;td&gt;
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'changeElementTag', { tag: 'th' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('changeElementTag')"
                   >
                     &lt;th&gt;
                   </button>
@@ -1101,9 +1175,10 @@
               ></button>
 
               <button
-                class="nf nf-oct-x outline-none p-1.5"
+                class="nf nf-oct-x outline-none p-1.5 disabled:opacity-40"
                 wf-onclick="post('designer.toolbar', 'deleteSelected')"
                 value=""
+                wf-disabled="state.decoration?.blocked('deleteSelected')"
               ></button>
             </div>
           </div>
@@ -1160,9 +1235,10 @@
                     class="*:hover:bg-[#091017]"
                   >
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: null, conflict: 'gfont' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleCssClass')"
                     >
                       <div>Unset</div></button
                     ><button
@@ -1209,10 +1285,11 @@
                       <div class="nf nf-md-chevron_left relative top-0.5"></div>
                       <div>{{state.designer.gfontCategory}}</div></button
                     ><button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-if="!/display|handwriting/i.test(state.designer.gfontCategory)"
                       wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: { 'Sans-serif': 'font-sans', Serif: 'font-serif', Monospace: 'font-mono' }[state.designer.gfontCategory], conflict: 'gfont' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleCssClass')"
                     >
                       <div>Use default</div>
                       <div
@@ -1230,11 +1307,12 @@
                   </div>
                   <div class="max-h-96 overflow-auto *:hover:bg-[#091017]">
                     <button
-                      class="w-full text-left flex justify-between items-center p-3 text-lg outline-none"
+                      class="w-full text-left flex justify-between items-center p-3 text-lg outline-none disabled:opacity-40"
                       wf-map="x of state.designer.gfonts || []"
                       wf-onattach="post('designer.gfontSample', _1, x.name)"
                       wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: `gfont-[${x.name.replaceAll(' ', '_')}]`, conflict: 'gfont' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleCssClass')"
                     >
                       <div>{{x.name}}</div>
                       <div
@@ -1262,9 +1340,10 @@
                   class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 *:hover:bg-[#091017] w-52"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-xs', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Extra Small</div>
                     <div
@@ -1275,9 +1354,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-sm', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Small</div>
                     <div
@@ -1288,9 +1368,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-base', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Base</div>
                     <div
@@ -1301,9 +1382,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-md', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Medium</div>
                     <div
@@ -1314,9 +1396,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-lg', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Large</div>
                     <div
@@ -1327,9 +1410,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Extra Large</div>
                     <div
@@ -1340,9 +1424,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-2xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>2 Extra Large</div>
                     <div
@@ -1353,9 +1438,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-3xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>3 Extra Large</div>
                     <div
@@ -1366,9 +1452,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-4xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>4 Extra Large</div>
                     <div
@@ -1379,9 +1466,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-5xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>5 Extra Large</div>
                     <div
@@ -1392,9 +1480,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-6xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>6 Extra Large</div>
                     <div
@@ -1405,9 +1494,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'text-7xl', conflict: 'textSize' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>7 Extra Large</div>
                     <div
@@ -1433,9 +1523,10 @@
                   class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 *:hover:bg-[#091017] w-52"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-thin', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Thin</div>
                     <div
@@ -1445,9 +1536,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-extralight', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Extra Light</div>
                     <div
@@ -1457,9 +1549,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-light', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Light</div>
                     <div
@@ -1469,9 +1562,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-normal', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Normal</div>
                     <div
@@ -1481,9 +1575,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-medium', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Medium</div>
                     <div
@@ -1493,9 +1588,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-semibold', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Semibold</div>
                     <div
@@ -1505,9 +1601,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'font-bold', conflict: 'fontWeight' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Bold</div>
                     <div
@@ -1517,9 +1614,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'italic', conflict: 'italic' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Italic</div>
                     <div
@@ -1529,9 +1627,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'not-italic', conflict: 'italic' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Not Italic</div>
                     <div
@@ -1541,9 +1640,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'underline', conflict: 'decoration' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Underline</div>
                     <div
@@ -1553,9 +1653,10 @@
                       <div class="relative top-[2px]">Set</div>
                     </div></button
                   ><button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'line-through', conflict: 'decoration' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Line Through</div>
                     <div
@@ -1581,9 +1682,10 @@
                   class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 *:hover:bg-[#091017] w-52"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-tighter', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Tighter</div>
                     <div
@@ -1594,9 +1696,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-tight', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Tight</div>
                     <div
@@ -1607,9 +1710,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-normal', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Normal</div>
                     <div
@@ -1620,9 +1724,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-wide', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Wide</div>
                     <div
@@ -1633,9 +1738,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-wider', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Wider</div>
                     <div
@@ -1646,9 +1752,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'toggleCssClass', { cls: 'tracking-widest', conflict: 'tracking' })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('toggleCssClass')"
                   >
                     <div>Widest</div>
                     <div
@@ -1676,9 +1783,10 @@
                 >
                   <div class="max-h-96 overflow-auto *:hover:bg-[#091017]">
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'red' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-red-500 min-h-0"></div>
@@ -1692,9 +1800,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'orange' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1710,9 +1819,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'amber' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-amber-500 min-h-0"></div>
@@ -1726,9 +1836,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'yellow' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1744,9 +1855,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'lime' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-lime-500 min-h-0"></div>
@@ -1760,9 +1872,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'green' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-green-500 min-h-0"></div>
@@ -1776,9 +1889,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'emerald' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1794,9 +1908,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'teal' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-teal-500 min-h-0"></div>
@@ -1810,9 +1925,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'cyan' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-cyan-500 min-h-0"></div>
@@ -1826,9 +1942,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'sky' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-sky-500 min-h-0"></div>
@@ -1842,9 +1959,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'blue' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-blue-500 min-h-0"></div>
@@ -1858,9 +1976,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'indigo' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1876,9 +1995,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'violet' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1894,9 +2014,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'purple' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1912,9 +2033,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'fuchsia' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -1930,9 +2052,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'pink' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-pink-500 min-h-0"></div>
@@ -1946,9 +2069,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'rose' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-rose-500 min-h-0"></div>
@@ -1962,9 +2086,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'slate' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-slate-500 min-h-0"></div>
@@ -1978,9 +2103,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'gray' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-gray-500 min-h-0"></div>
@@ -1994,9 +2120,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'zinc' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-zinc-500 min-h-0"></div>
@@ -2010,9 +2137,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'neutral' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2028,9 +2156,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleHue', { hue: 'stone' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-stone-500 min-h-0"></div>
@@ -2063,9 +2192,10 @@
                   class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 *:hover:bg-[#091017] w-36"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 50 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2082,9 +2212,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 100 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2101,9 +2232,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 200 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2120,9 +2252,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 300 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2139,9 +2272,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 400 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2158,9 +2292,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 500 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2177,9 +2312,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 600 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2196,9 +2332,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 700 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2215,9 +2352,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 800 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2234,9 +2372,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 900 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2253,9 +2392,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setShade', { shade: 950 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2288,9 +2428,10 @@
                 >
                   <div class="max-h-96 overflow-auto *:hover:bg-[#091017]">
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none *:hover:bg-[#091017]"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none *:hover:bg-[#091017] disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'red' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-red-500 min-h-0"></div>
@@ -2304,9 +2445,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'orange' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2322,9 +2464,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'amber' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-amber-500 min-h-0"></div>
@@ -2338,9 +2481,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'yellow' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2356,9 +2500,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'lime' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-lime-500 min-h-0"></div>
@@ -2372,9 +2517,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'green' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-green-500 min-h-0"></div>
@@ -2388,9 +2534,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'emerald' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2406,9 +2553,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'teal' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-teal-500 min-h-0"></div>
@@ -2422,9 +2570,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'cyan' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-cyan-500 min-h-0"></div>
@@ -2438,9 +2587,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'sky' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-sky-500 min-h-0"></div>
@@ -2454,9 +2604,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'blue' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-blue-500 min-h-0"></div>
@@ -2470,9 +2621,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'indigo' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2488,9 +2640,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'violet' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2506,9 +2659,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'purple' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2524,9 +2678,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'fuchsia' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2542,9 +2697,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'pink' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-pink-500 min-h-0"></div>
@@ -2558,9 +2714,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'rose' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-rose-500 min-h-0"></div>
@@ -2574,9 +2731,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'slate' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-slate-500 min-h-0"></div>
@@ -2590,9 +2748,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'gray' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-gray-500 min-h-0"></div>
@@ -2606,9 +2765,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'zinc' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-zinc-500 min-h-0"></div>
@@ -2622,9 +2782,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'neutral' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -2640,9 +2801,10 @@
                       </div>
                     </button>
                     <button
-                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                      class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                       wf-onclick="post('designer.toolbar', 'toggleBgHue', { hue: 'stone' })"
                       value=""
+                      wf-disabled="state.decoration?.blocked('toggleBgHue')"
                     >
                       <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded bg-stone-500 min-h-0"></div>
@@ -2675,9 +2837,10 @@
                   class="rounded shadow-sm border transition text-sm overflow-hidden border-black/50 bg-[#060a0f] text-neutral-100 *:hover:bg-[#091017] w-36"
                 >
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 50 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2694,9 +2857,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 100 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2713,9 +2877,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 200 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2732,9 +2897,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 300 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2751,9 +2917,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 400 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2770,9 +2937,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 500 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2789,9 +2957,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 600 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2808,9 +2977,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 700 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2827,9 +2997,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 800 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2846,9 +3017,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 900 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2865,9 +3037,10 @@
                     </div>
                   </button>
                   <button
-                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none"
+                    class="w-full text-left px-3 py-2 flex justify-between items-center outline-none disabled:opacity-40"
                     wf-onclick="post('designer.toolbar', 'setBgShade', { shade: 950 })"
                     value=""
+                    wf-disabled="state.decoration?.blocked('setBgShade')"
                   >
                     <div class="flex items-center gap-3">
                       <div
@@ -2900,9 +3073,9 @@
             <div class="flex gap-px">
               <button
                 class="ProjectsPanel-createBtn outline-none border-b border-black/50 transition-all h-12 text-xl transition-colors shrink-0 hover:bg-[#008ad9] bg-[#0071b2] flex-1"
-                wf-onclick="post('projects.open')"
                 value=""
                 wf-if="window.__TAURI__"
+                wf-onclick="post('projects.open')"
               >
                 Open</button
               ><button
@@ -3027,8 +3200,8 @@
           </div>
           <div
             class="DbPanel flex flex-col text-neutral-100 border-r border-black/50 select-none shrink-0 bg-[#091017c0] backdrop-blur-[4px] w-full md:w-96"
-            wf-class="{{replaces w-96: state.app.demo ? 'w-64' : 'w-96'}}"
             wf-if="state.app.panel === 'db'"
+            wf-class="{{replaces w-96: state.app.demo ? 'w-64' : 'w-96'}}"
           >
             <button
               class="outline-none border-b border-black/50 transition-all h-12 text-xl transition-colors hover:bg-[#008ad9] shrink-0 bg-[#0071b2] DbPanel-createBtn"
@@ -3086,7 +3259,7 @@
             >
               <div
                 class="italic mb-1"
-                wf-if="!state.designer.current.cursors.master?.length"
+                wf-if="!state.designer.current.cursors.master?.length &amp;&amp; !state.decoration?.frame"
               >
                 There are currently no selected elements. Select some to see and
                 edit their styles here.
@@ -3094,7 +3267,7 @@
 
               <div
                 class="italic mb-1"
-                wf-if="state.designer.current.cursors.master?.length &amp;&amp; !state.styles.list.length"
+                wf-if="state.designer.current.cursors.master?.length &amp;&amp; !state.styles.list.length &amp;&amp; !state.decoration?.frame"
               >
                 The currently selected elements have no styles. Add some here or
                 through the
@@ -3104,6 +3277,7 @@
               <div
                 class="StylesPanel-style flex items-center gap-3 rounded outline-none py-1 justify-between px-2"
                 wf-map="x of state.styles.list"
+                wf-class="{{state.styles.readOnly(x) &amp;&amp; 'text-neutral-500'}}"
               >
                 <div class="flex items-center gap-3">
                   <div class="nf p-2 nf-fa-paint_brush"></div>
@@ -3124,7 +3298,7 @@
                     value=""
                   />
                 </div>
-                <div class="flex">
+                <div class="flex" wf-if="!state.styles.readOnly(x)">
                   <button
                     class="StylesPanel-editBtn outline-none nf p-2 nf-fa-pencil"
                     wf-onclick="event.preventDefault(), event.stopPropagation(), post('styles.edit', x)"
@@ -3139,7 +3313,7 @@
               </div>
               <div
                 class="StylesPanel-addStyle flex items-center gap-3 rounded outline-none py-1 px-2"
-                wf-if="state.designer.current.cursors.master?.length"
+                wf-if="state.designer.current.cursors.master?.length &amp;&amp; state.styles.canAdd"
               >
                 <div class="nf p-2 nf-fa-plus"></div>
                 <input
@@ -3639,90 +3813,139 @@
             </div>
           </div>
 
-          <div class="flex flex-1" id="Canvas" wf-if="!state.app.docs">
+          <div class="flex-1 flex flex-col min-w-0" wf-if="!state.app.docs">
             <div
-              class="flex justify-center items-center px-16 flex-1 select-none bg-black/40 backdrop-blur-[2px]"
-              wf-class="{{!state.app.brandCanvas &amp;&amp; 'hidden'}}"
+              class="DecorationBar relative z-10 shrink-0 text-neutral-100 text-sm border-b border-black/50 bg-[#060a0fc0] backdrop-blur-[4px] flex items-center gap-2 px-4 py-2"
+              wf-if="state.decoration?.frame"
             >
-              <div
-                class="gfont-[Pacifico] text-6xl text-black/70"
-                wf-if="state.settings.opt?.brand"
+              <input
+                class="DecorationBar-address outline-none flex-1 min-w-32 rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                placeholder="Address"
+                autocapitalize="off"
+                wf-value="state.decoration.urlInput"
+                wf-onkeydown="event.key === 'Enter' &amp;&amp; post('decoration.navigate')"
+                value=""
+              /><button
+                class="DecorationBar-reload nf nf-fa-refresh outline-none rounded p-1.5 hover:bg-[#1a2a40] transition-colors"
+                title="Reload"
+                wf-onclick="post('decoration.reload')"
+                value=""
+              ></button
+              ><button
+                class="DecorationBar-hookBtn outline-none shrink-0 rounded px-3 py-1 bg-[#0071b2] hover:bg-[#008ad9] transition-colors"
+                wf-if="!state.decoration.frame.preview &amp;&amp; state.decoration.selected?.kind === 'site'"
+                wf-onclick="post('decoration.editHook')"
+                value=""
               >
-                Webfoundry
-              </div>
-            </div>
-            <div
-              class="Designer-leftPadder flex-1 bg-[#060a0fc0] backdrop-blur-[2px] hidden md:block"
-              wf-if="document.querySelector('.Designer-activeFrame') &amp;&amp; !state.app.demo"
-            ></div>
-
-            <div
-              class="shrink-1 bg-[#060a0fc0] backdrop-blur-[2px] grow-1 md:grow-0"
-              wf-onattach="post('designer.hookFrameWidth', _1)"
-              wf-class="{{!state.designer.current?.ready &amp;&amp; 'hidden'}} {{state.app.demo &amp;&amp; 'w-full!'}}"
-            >
-              <div
-                class="flex flex-col justify-center h-full"
-                wf-map="x of state.designer.list"
-                wf-class="{{!state.designer.frameVisible(x.path) &amp;&amp; 'hidden'}}"
+                Hook</button
+              ><button
+                class="DecorationBar-editHookBtn outline-none shrink-0 rounded px-3 py-1 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
+                wf-if="!state.decoration.frame.preview &amp;&amp; state.decoration.selected?.kind === 'hooked'"
+                wf-onclick="post('decoration.editHook')"
+                value=""
               >
-                <iframe
-                  class="bg-white h-full"
-                  wf-class="{{state.designer.frameVisible(x.path) &amp;&amp; 'Designer-activeFrame'}}"
-                  wf-src="state.designer.src(x.path)"
-                  wf-onattach="post('designer.frameAttach', x.path, _1)"
-                  wf-onload="post('designer.frameLoaded', x.path)"
-                  wf-onerror="post('designer.frameLoaded', x.path, event)"
-                  allow="microphone;camera;geolocation;clipboard-write;clipboard-read;cross-origin-isolated"
-                ></iframe>
-              </div>
-            </div>
-
-            <div
-              class="Designer-rightPadder shrink-0 flex-1 bg-[#060a0fc0] backdrop-blur-[2px] hidden md:flex"
-              wf-if="document.querySelector('.Designer-activeFrame') &amp;&amp; !state.app.demo"
-            >
-              <div class="Designer-rightPadderPole flex items-center px-1">
+                Edit hook
+              </button>
+              <div
+                class="DecorationBar-hooks flex items-center gap-1 overflow-x-auto min-w-0"
+                wf-if="state.decoration.model?.hooks.length"
+              >
                 <button
-                  class="Designer-resizeBtn w-2 rounded-full h-24 bg-neutral-300 outline-none"
-                  wf-onpointerdown="event.preventDefault(), post('designer.resize', event)"
+                  class="DecorationBar-hook font-mono text-xs shrink-0 outline-none rounded px-2 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
+                  wf-map="x of state.decoration.model.hooks"
+                  wf-class="{{/^(unmatched|ambiguous|error)$/.test(state.decoration.statuses[x.id]?.status) &amp;&amp; 'text-amber-400'}} {{state.decoration.statuses[x.id]?.status === 'off-page' &amp;&amp; 'text-neutral-500'}}"
+                  wf-onclick="post('decoration.selectHook', x.id)"
                   value=""
-                ></button>
+                >
+                  {{x.key}} ({{state.decoration.statuses[x.id]?.count ?? 0}})
+                </button>
               </div>
             </div>
-            <div
-              class="min-w-96 flex justify-center items-center flex-1 overflow-hidden bg-[#091017c0] backdrop-blur-[4px]"
-              wf-if="isMedia(state.files.current)"
-            >
-              <img
-                src="https://cdn.donmai.us/original/c4/69/__original_drawn_by_keke_kotowari__c469639feef9be77398d542e441fa534.gif"
-                class="w-64 max-h-full object-cover rounded-lg"
-                wf-if="mimeLookup(state.files.current)?.startsWith?.('image/')"
-                wf-class="{{replaces w-64: !state.files.current &amp;&amp; 'w-64'}}"
-                wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
-              /><video
-                controls=""
-                class="max-h-full"
-                wf-if="mimeLookup(state.files.current)?.startsWith?.('video/')"
-                wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
-                hidden=""
-              ></video
-              ><audio
-                controls=""
-                wf-if="mimeLookup(state.files.current)?.startsWith?.('audio/')"
-                wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
-                hidden=""
-              ></audio>
+            <div class="flex flex-1" id="Canvas" wf-if="!state.app.docs">
+              <div
+                class="flex justify-center items-center px-16 flex-1 select-none bg-black/40 backdrop-blur-[2px]"
+                wf-class="{{!state.app.brandCanvas &amp;&amp; 'hidden'}}"
+              >
+                <div
+                  class="gfont-[Pacifico] text-6xl text-black/70"
+                  wf-if="state.settings.opt?.brand"
+                >
+                  Webfoundry
+                </div>
+              </div>
+              <div
+                class="Designer-leftPadder flex-1 bg-[#060a0fc0] backdrop-blur-[2px] hidden md:block"
+                wf-if="document.querySelector('.Designer-activeFrame') &amp;&amp; !state.app.demo"
+              ></div>
+
+              <div
+                class="shrink-1 bg-[#060a0fc0] backdrop-blur-[2px] grow-1 md:grow-0"
+                wf-onattach="post('designer.hookFrameWidth', _1)"
+                wf-class="{{!state.designer.current?.ready &amp;&amp; 'hidden'}} {{state.app.demo &amp;&amp; 'w-full!'}}"
+              >
+                <div
+                  class="flex flex-col justify-center h-full"
+                  wf-map="x of state.designer.list"
+                  wf-class="{{!state.designer.frameVisible(x.path) &amp;&amp; 'hidden'}}"
+                >
+                  <iframe
+                    class="bg-white h-full"
+                    wf-class="{{state.designer.frameVisible(x.path) &amp;&amp; 'Designer-activeFrame'}}"
+                    wf-src="state.designer.src(x.path)"
+                    wf-onattach="post('designer.frameAttach', x.path, _1)"
+                    wf-onload="post('designer.frameLoaded', x.path)"
+                    wf-onerror="post('designer.frameLoaded', x.path, event)"
+                    allow="microphone;camera;geolocation;clipboard-write;clipboard-read;cross-origin-isolated"
+                  ></iframe>
+                </div>
+              </div>
+
+              <div
+                class="Designer-rightPadder shrink-0 flex-1 bg-[#060a0fc0] backdrop-blur-[2px] hidden md:flex"
+                wf-if="document.querySelector('.Designer-activeFrame') &amp;&amp; !state.app.demo"
+              >
+                <div class="Designer-rightPadderPole flex items-center px-1">
+                  <button
+                    class="Designer-resizeBtn w-2 rounded-full h-24 bg-neutral-300 outline-none"
+                    wf-onpointerdown="event.preventDefault(), post('designer.resize', event)"
+                    value=""
+                  ></button>
+                </div>
+              </div>
+              <div
+                class="min-w-96 flex justify-center items-center flex-1 overflow-hidden bg-[#091017c0] backdrop-blur-[4px]"
+                wf-if="isMedia(state.files.current)"
+              >
+                <img
+                  src="https://cdn.donmai.us/original/c4/69/__original_drawn_by_keke_kotowari__c469639feef9be77398d542e441fa534.gif"
+                  class="w-64 max-h-full object-cover rounded-lg"
+                  wf-if="mimeLookup(state.files.current)?.startsWith?.('image/')"
+                  wf-class="{{replaces w-64: !state.files.current &amp;&amp; 'w-64'}}"
+                  wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
+                /><video
+                  controls=""
+                  class="max-h-full"
+                  wf-if="mimeLookup(state.files.current)?.startsWith?.('video/')"
+                  wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
+                  hidden=""
+                ></video
+                ><audio
+                  controls=""
+                  wf-if="mimeLookup(state.files.current)?.startsWith?.('audio/')"
+                  wf-src="`/files/${sessionStorage.webfoundryTabId}/${state.projects.current}/${state.files.current}`"
+                  hidden=""
+                ></audio>
+              </div>
+              <div
+                class="min-w-96 flex flex-col flex-1 bg-[#091017c0] backdrop-blur-[4px]"
+                wf-if="/^text\/(?!html$).+$/.test(mimeLookup(state.files.current))"
+                id="CodeEditor"
+              ></div>
+              <div
+                class="min-w-96 flex flex-col flex-1 bg-[#091017c0] backdrop-blur-[4px]"
+                wf-if="state.app.panel === 'db' &amp;&amp; state.db.current"
+              ></div>
             </div>
-            <div
-              class="min-w-96 flex flex-col flex-1 bg-[#091017c0] backdrop-blur-[4px]"
-              wf-if="/^text\/(?!html$).+$/.test(mimeLookup(state.files.current))"
-              id="CodeEditor"
-            ></div>
-            <div
-              class="min-w-96 flex flex-col flex-1 bg-[#091017c0] backdrop-blur-[4px]"
-              wf-if="state.app.panel === 'db' &amp;&amp; state.db.current"
-            ></div>
           </div>
           <div
             class="DocsPanel flex flex-col text-neutral-100 border-r border-black/50 select-none shrink-0 overflow-auto backdrop-blur-[4px] bg-[#060a0fc0] flex-1 min-w-7xl"

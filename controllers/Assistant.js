@@ -3,6 +3,7 @@ import autoassist from 'https://esm.run/@camilaprav/kittygpt@0.0.65/autoassist.j
 import morphdom from 'https://esm.run/morphdom';
 import { arrayify, debounce, resolve } from '../other/util.js';
 import { loadman } from '../other/util.js';
+import { userAction } from '../other/shadowEditors.js';
 
 export default class Assistant {
   actions = {
@@ -12,9 +13,10 @@ export default class Assistant {
       for (let x of ['designer:htmlsnap:ready', 'designer:select:ready', 'files:select:ready']) {
         bus.on(x, ({ frame, path }) => {
           frame ??= state.designer.list.find(x => x.path === path);
-          if (!frame?.ready) return;
+          let root = frame?.ready && frame.body?.firstElementChild;
+          if (!root || frame !== state.designer.current) return; // Background frames must not replace the visible page's snapshot.
           this.state.doc.head.innerHTML = frame.head.innerHTML;
-          this.state.doc.body.firstElementChild.outerHTML = frame.body.firstElementChild.outerHTML;
+          this.state.doc.body.firstElementChild.outerHTML = root.outerHTML;
         });
       }
       bus.on('projects:create:ready', async () => {
@@ -70,7 +72,7 @@ export default class Assistant {
               if (document.querySelector('dialog')) throw new Error(`Operation not possible: A modal dialog is currently open`);
               let disabled = v?.disabled?.(params)?.filter?.(Boolean);
               if (disabled?.length) return { success: false, error: `Operation not possible because:\n${disabled.map(x => `- ${x}`).join('\n')}` };
-              return await v.handler(params);
+              return await userAction(() => v.handler(params));
             } catch (err) {
               console.error(err);
               return { success: false, error: err.toString() };

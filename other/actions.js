@@ -4,7 +4,7 @@ import confetti from 'https://esm.run/canvas-confetti';
 import rfiles from '../repos/rfiles.js';
 import { applyPatch } from './diff.js';
 import { getOpenAIKey, complete as openaiComplete } from './openai.js';
-import { loadman, joinPath } from '../other/util.js';
+import { ifeval, loadman, joinPath } from '../other/util.js';
 import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { minimatch } from 'https://esm.run/minimatch';
 
@@ -102,6 +102,10 @@ let SHELL_COMMAND_GROUPS = [
       { syntax: 'setPlatformOs web|win|lin|mac|android', description: 'Set IDE platform preview OS for win:*/lin:*/mac:*/android:* utilities (web = plain browser).', tool: 'setPlatformOs', args: [{ name: 'os', description: 'web, win, lin, mac, or android' }] },
       { syntax: 'isPagePreview', description: 'Current page mode: preview (page runs live) or edit (visual editor).', tool: 'isPagePreview' },
       { syntax: 'setPagePreview preview|edit|toggle', description: 'Switch the open page between preview and edit modes.', tool: 'setPagePreview', args: [{ name: 'mode', description: 'preview, edit, or toggle' }] },
+      { syntax: 'getProjectTitle', description: 'Current project title.', tool: 'getProjectTitle' },
+      { syntax: 'setProjectTitle [title]', description: 'Set the project title.', tool: 'setProjectTitle', args: [{ name: 'title', description: 'New project title' }] },
+      { syntax: 'getPageTitle', description: 'Open page title (blank uses the project title).', tool: 'getPageTitle' },
+      { syntax: 'setPageTitle [title]', description: 'Set the open page title (blank uses the project title).', tool: 'setPageTitle', args: [{ name: 'title', description: 'New page title, or blank' }] },
     ],
   },
   {
@@ -192,7 +196,7 @@ let actions = window.actions = {
 
   togglePreview: {
     disabled: () => [
-      !state.designer.open && `Designer closed.`,
+      !state.designer.targetOpen && `Designer closed.`,
       state.collab.uid !== 'master' && `Peers can't toggle preview.`,
     ],
     codexHidden: () => true,
@@ -211,11 +215,13 @@ let actions = window.actions = {
       type: 'object',
       properties: {
         path: { type: 'string', description: `Full path to new file with extension (empty prompts user)` },
+        select: { type: 'boolean', description: `Open the new file in the IDE afterwards (default: only when prompting the user)` },
       },
     },
-    handler: async ({ path = null } = {}) => {
-      await post('files.create', path?.split?.('/')?.slice?.(0, -1)?.join?.('/'), path?.split?.('/')?.at?.(-1));
-      return { success: true, path };
+    handler: async ({ path = null, select = !path } = {}) => {
+      let result = await post('files.create', path?.split?.('/')?.slice?.(0, -1)?.join?.('/'), path?.split?.('/')?.at?.(-1), 'file', { select });
+      if (result?.success === false) return { success: false, error: result.reason };
+      return { success: true, path, selected: !!select };
     },
   },
 
@@ -276,7 +282,6 @@ let actions = window.actions = {
     description: `User may specify a file without the full path; use listFiles to find the right one if not ambiguous.`,
     disabled: () => [
       !state.projects.current && `Project not open`,
-      state.collab.uid !== 'master' && `Peers can't select files.`,
     ],
     parameters: () => {
       let options = getProjectPaths({ includeDirectories: false, excludeCurrent: true });
@@ -810,7 +815,7 @@ let actions = window.actions = {
 
   undo: {
     shortcut: ['Ctrl-z', 'z'],
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     parameters: {
       type: 'object',
       properties: {
@@ -819,7 +824,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'undo' });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (!frame.history[cur] || frame.ihistory[cur] < 1) return;
       --frame.ihistory[cur];
       await frame.history[cur][frame.ihistory[cur]](false);
@@ -828,7 +833,7 @@ let actions = window.actions = {
 
   redo: {
     shortcut: ['Ctrl-y', 'y'],
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     parameters: {
       type: 'object',
       properties: {
@@ -837,7 +842,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'redo' });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (!frame.history[cur] || !frame.history[cur][frame.ihistory[cur]]) return;
       await frame.history[cur][frame.ihistory[cur]](true);
       ++frame.ihistory[cur];
@@ -846,7 +851,7 @@ let actions = window.actions = {
 
   changeSelection: {
     description: `Select elements based on their data-htmlsnap IDs`,
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     parameters: {
       type: 'object',
       properties: {
@@ -856,9 +861,9 @@ let actions = window.actions = {
       required: ['s'],
     },
     handler: async ({ cur = 'master', s } = {}) => {
-      if (document.activeElement.tagName !== 'BODY') document.activeElement.blur();
+      if (!state.designer.scoped && document.activeElement.tagName !== 'BODY') document.activeElement.blur();
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'changeSelection', cur, s });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let requested = Array.isArray(s) ? s.map(x => String(x)) : [];
       let prevSelection = frame.cursors[cur] || [];
       let seen = new Set();
@@ -880,8 +885,8 @@ let actions = window.actions = {
       if (!resolved.length) frame.lastCursors[cur] = prevSelection;
       frame.cursors[cur] = resolved;
       d.update();
-      if (state.collab.uid === cur) await post('designer.toggleMobileKeyboard');
-      await post('designer.sync', state.designer.current);
+      if (!state.designer.scoped && state.collab.uid === cur) await post('designer.toggleMobileKeyboard');
+      await post('designer.sync', state.designer.target);
       await post('collab.sync');
       state.event.bus.emit('actions:changeSelection:ready', { s });
       let result = { success: true, selectedIds: [...frame.cursors[cur]] };
@@ -899,7 +904,7 @@ let actions = window.actions = {
       `only use upon explicit user request`,
     ].join(' '),
     shortcut: 'Escape',
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     parameters: {
       type: 'object',
       properties: {
@@ -908,7 +913,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'toggleSelection', cur });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let sel = frame.cursors[cur] || [];
       if (sel.length) await actions.changeSelection.handler({ cur, s: [] });
       else if (frame.lastCursors[cur]?.length) await actions.changeSelection.handler({ cur, s: frame.lastCursors[cur] });
@@ -919,8 +924,8 @@ let actions = window.actions = {
     description: `Moves selection to the parent element`,
     shortcut: ['ArrowLeft', 'h'],
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -932,7 +937,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'selectParentElement', cur, i });
       let k = 'parentElement';
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       while (i-- > 0) {
         let s = frame.map.get(frame.cursors[cur][0]);
@@ -944,8 +949,8 @@ let actions = window.actions = {
   selectNextSibling: {
     shortcut: ['ArrowDown', 'j'],
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -957,7 +962,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'selectNextSibling', cur, i });
       let k = 'nextElementSibling';
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       while (i-- > 0) {
         let s = frame.map.get(frame.cursors[cur][0]);
@@ -969,8 +974,8 @@ let actions = window.actions = {
   selectPrevSibling: {
     shortcut: ['ArrowUp', 'k'],
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -982,7 +987,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'selectPrevSibling', cur, i });
       let k = 'previousElementSibling';
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       while (i-- > 0) {
         let s = frame.map.get(frame.cursors[cur][0]);
@@ -994,8 +999,8 @@ let actions = window.actions = {
   selectFirstChild: {
     shortcut: ['ArrowRight', 'l'],
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1007,7 +1012,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'selectFirstChild', cur, i });
       let k = 'firstElementChild';
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       while (i-- > 0) {
         let s = frame.map.get(frame.cursors[cur][0]);
@@ -1019,8 +1024,8 @@ let actions = window.actions = {
   selectLastChild: {
     shortcut: ['ArrowRight', 'l'],
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1032,7 +1037,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'selectLastChild', cur, i });
       let k = 'lastElementChild';
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       while (i-- > 0) {
         let s = frame.map.get(frame.cursors[cur][0]);
@@ -1043,7 +1048,7 @@ let actions = window.actions = {
 
   createNextSibling: {
     shortcut: 'a',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1055,7 +1060,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createNextSibling', cur, tag, html, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       let ref = frame.map.get(frame.cursors[cur][0]);
       if (!ref || ref === frame.root) return;
@@ -1110,7 +1115,7 @@ let actions = window.actions = {
 
   createPrevSibling: {
     shortcut: 'A',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1122,7 +1127,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createPrevSibling', cur, tag, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       let ref = frame.map.get(frame.cursors[cur][0]);
       if (!ref || ref === frame.root) return;
@@ -1177,7 +1182,7 @@ let actions = window.actions = {
 
   createLastChild: {
     shortcut: 'i',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1189,7 +1194,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createLastChild', cur, tag, html, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       let parent = frame.map.get(frame.cursors[cur][0]);
       if (!parent) return;
@@ -1244,7 +1249,7 @@ let actions = window.actions = {
 
   createFirstChild: {
     shortcut: 'I',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1256,7 +1261,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', tag = 'div', html = null, i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'createFirstChild', cur, tag, html, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       if (frame.cursors[cur].length !== 1) return;
       let parent = frame.map.get(frame.cursors[cur][0]);
       if (!parent) return;
@@ -1312,8 +1317,8 @@ let actions = window.actions = {
   changeElementId: {
     shortcut: 'g',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1323,7 +1328,7 @@ let actions = window.actions = {
       },
     },
     handler: async ({ cur = 'master', id = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (id == null) {
@@ -1355,7 +1360,7 @@ let actions = window.actions = {
 
   changeElementTag: {
     shortcut: 'e',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1364,7 +1369,7 @@ let actions = window.actions = {
       },
     },
     handler: async ({ cur = 'master', tag = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
 
@@ -1437,8 +1442,8 @@ let actions = window.actions = {
     description: `Copies currently selected element(s)`,
     shortcut: 'c',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1448,7 +1453,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'copySelected', cur });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let els = frame.cursors[cur].map(id => frame.map.get(id)).filter(Boolean);
       for (let x of els) { x.removeAttribute('data-htmlsnap'); x.querySelectorAll('*').forEach(y => y.removeAttribute('data-htmlsnap')) }
       let html = els.map(n => n.outerHTML).join('\n');
@@ -1463,8 +1468,8 @@ let actions = window.actions = {
     description: `Deletes and copies currently selected element(s)`,
     shortcut: 'd',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1475,7 +1480,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'deleteSelected', cur, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       await actions.copySelected.handler({ cur });
       while (i-- > 0) {
         let cursors = frame.cursors[cur];
@@ -1547,8 +1552,8 @@ let actions = window.actions = {
     description: `Pastes copied elements as the next sibling`,
     shortcut: 'p',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1559,7 +1564,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'pasteNextSibling', cur, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard');
       if (!html) return;
       let pos = 'afterend';
@@ -1600,8 +1605,8 @@ let actions = window.actions = {
     description: `Pastes copied elements as the previous sibling`,
     shortcut: 'P',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1609,7 +1614,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'pastePrevSibling', cur, i });
-      let frame = state.designer.current; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
+      let frame = state.designer.target; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
       let pos = 'beforebegin'; let cursors = [...frame.cursors[cur] || []]; if (!cursors.length) return; let cloneIds = [];
       await post('designer.pushHistory', cur, async apply => {
         if (apply && !cloneIds.length) {
@@ -1635,8 +1640,8 @@ let actions = window.actions = {
     description: `Pastes copied elements as the last child`,
     shortcut: 'o',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1644,7 +1649,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'pasteLastChild', cur, i });
-      let frame = state.designer.current; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
+      let frame = state.designer.target; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
       let pos = 'beforeend'; let cursors = [...frame.cursors[cur] || []]; if (!cursors.length) return; let cloneIds = [];
       await post('designer.pushHistory', cur, async apply => {
         if (apply && !cloneIds.length) {
@@ -1670,8 +1675,8 @@ let actions = window.actions = {
     description: `Pastes copied elements as the first child`,
     shortcut: 'O',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1679,7 +1684,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'pasteFirstChild', cur, i });
-      let frame = state.designer.current; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
+      let frame = state.designer.target; let html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard'); if (!html) return;
       let pos = 'afterbegin'; let cursors = [...frame.cursors[cur] || []]; if (!cursors.length) return; let cloneIds = [];
       await post('designer.pushHistory', cur, async apply => {
         if (apply && !cloneIds.length) {
@@ -1705,8 +1710,8 @@ let actions = window.actions = {
     description: `Wraps selected elements with a new element`,
     shortcut: 'w',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1718,7 +1723,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', tag = 'div', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'wrap', cur, tag, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let els = frame.cursors[cur].map(id => frame.map.get(id)).filter(Boolean);
       if (!els.length) return;
       let wrapIds = [];
@@ -1790,8 +1795,8 @@ let actions = window.actions = {
     description: `Unwraps selected element(s), promoting children to their level`,
     shortcut: 'W',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1802,7 +1807,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', i = 1 } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'unwrap', cur, i });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let wrappers = frame.cursors[cur].map(id => frame.map.get(id)).filter(Boolean);
       if (!wrappers.length) return;
       let wrapIds = wrappers.map(x => frame.map.getKey(x));
@@ -1853,7 +1858,7 @@ let actions = window.actions = {
   },
 
   addCssClasses: {
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: {
       type: 'object',
       properties: {
@@ -1864,7 +1869,7 @@ let actions = window.actions = {
     },
     handler: async ({ cur = 'master', cls } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'addCssClasses', cur, cls });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (Array.isArray(cls)) cls = cls.join(' ');
@@ -1913,11 +1918,11 @@ let actions = window.actions = {
   },
 
   removeCssClasses: {
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string', description: `Whose selection to use (defaults to master)` }, cls: { type: 'array', items: { type: 'string' } } }, required: ['cls'] },
     handler: async ({ cur = 'master', cls } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'removeCssClasses', cur, cls });
-      let frame = state.designer.current; let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean); if (!targets.length) return;
+      let frame = state.designer.target; let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean); if (!targets.length) return;
       if (Array.isArray(cls)) cls = cls.join(' ');
       if (typeof cls === 'string') cls = cls.trim();
       let tokens = []; let re = /{{(?:[^{}]|{{[^}]*}})*}}|[^\s]+/g; let m; while (m = re.exec(cls)) tokens.push(m[0]);
@@ -1957,8 +1962,8 @@ let actions = window.actions = {
 
   replaceCssClasses: {
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -1972,7 +1977,7 @@ let actions = window.actions = {
     handler: async ({ cur = 'master', old, cls } = {}) => {
       if (old?.startsWith?.('wfregexp:')) old = new RegExp(old.slice('wfregexp:'.length + 1, -1));
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'replaceCssClasses', cur, old: old instanceof RegExp ? `wfregexp:${old}` : old, cls });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (Array.isArray(cls)) cls = cls.join(' ');
@@ -2040,8 +2045,8 @@ let actions = window.actions = {
   toggleCssClass: {
     description: `Toggles a single Tailwind class, optionally removing conflicting ones`,
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2053,7 +2058,7 @@ let actions = window.actions = {
       required: ['cls'],
     },
     handler: async ({ cur = state.collab.uid, cls, conflict = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let ids = frame.cursors[cur] || [];
       if (!ids.length) return;
       let allUnset = ids.every(id => {
@@ -2079,8 +2084,8 @@ let actions = window.actions = {
   toggleHue: {
     description: `Toggles Tailwind text hue for selected elements`,
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2108,8 +2113,8 @@ let actions = window.actions = {
   setShade: {
     description: `Sets Tailwind text shade for selected elements`,
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2135,8 +2140,8 @@ let actions = window.actions = {
   toggleBgHue: {
     description: `Toggles Tailwind background hue for selected elements`,
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2164,8 +2169,8 @@ let actions = window.actions = {
   setBgShade: {
     description: `Sets Tailwind background shade for selected elements`,
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2192,8 +2197,8 @@ let actions = window.actions = {
     description: `Changes the outer HTML of selected elements (prompts if not provided)`,
     shortcut: 'm',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     codexOnly: true,
     parameters: {
@@ -2204,7 +2209,7 @@ let actions = window.actions = {
       },
     },
     handler: async ({ cur = 'master', html } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let cursors = frame.cursors[cur];
       if (!cursors?.length) return;
       let replaced = cursors.map(id => frame.map.get(id)).filter(Boolean);
@@ -2264,8 +2269,8 @@ let actions = window.actions = {
     description: `Changes the inner HTML of selected elements (prompts if not provided)`,
     shortcut: 'M',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && state.designer.target.cursors[cur]?.length !== 1 && `A single element must be selected.`,
     ],
     parameters: {
       type: 'object',
@@ -2276,7 +2281,7 @@ let actions = window.actions = {
       required: ['desc'],
     },
     handler: async ({ cur = 'master', desc = null, html = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prev = targets.map(x => x.innerHTML);
@@ -2291,7 +2296,7 @@ let actions = window.actions = {
         }, {
           role: 'user',
           content: [
-            `Page HTML: ${state.designer.current.snap}`,
+            `Page HTML: ${state.designer.target.snap}`,
             `---`,
             `Selection htmlsnap IDs: ${targets.map(x => frame.map.getKey(x)).join(', ')}`,
             `---`,
@@ -2322,10 +2327,10 @@ let actions = window.actions = {
 
   changeInputPlaceholder: {
     shortcut: '@',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, placeholder: { type: 'string' } } },
     handler: async ({ cur = 'master', placeholder = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(x => /^HTML(InputElement|TextAreaElement)$/.test(x.constructor.name));
       if (!targets.length) return;
       let prev = targets.map(x => x.placeholder);
@@ -2352,10 +2357,10 @@ let actions = window.actions = {
   changeFormMethod: {
     description: `Changes a form element's method attribute`,
     shortcut: 'N',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, method: { type: 'string' } } },
     handler: async ({ cur = 'master', method } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(x => x?.tagName === 'FORM');
       if (!targets.length) return;
       let prev = targets.map(x => x.getAttribute('method'));
@@ -2382,11 +2387,11 @@ let actions = window.actions = {
   toggleHidden: {
     description: `Toggles visibility of selected elements (via hidden attribute)`,
     shortcut: 'x',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'toggleHidden', cur });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prev = targets.map(x => x.hidden);
@@ -2450,17 +2455,67 @@ let actions = window.actions = {
     },
   },
 
+  getProjectTitle: {
+    description: `Returns the project title`,
+    disabled: () => [!state.projects.current && `No project open.`, state.collab.uid !== 'master' && `Peers can't access the project title.`],
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      if (!await rfiles.load(state.projects.current, 'index.html')) return { success: false, error: `This project has no index.html, so it has no title.` };
+      await post('settings.fetchProjectTitle');
+      return { success: true, title: state.settings.projectTitle ?? '' };
+    },
+  },
+
+  setProjectTitle: {
+    description: `Sets the project title`,
+    disabled: () => [!state.projects.current && `No project open.`, state.collab.uid !== 'master' && `Peers can't change the project title.`],
+    parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
+    handler: async ({ title } = {}) => {
+      if (!await rfiles.load(state.projects.current, 'index.html')) return { success: false, error: `This project has no index.html, so it has no title.` };
+      state.settings.projectTitle = title ?? '';
+      await post('settings.projectTitleChanged');
+      return { success: true, title: state.settings.projectTitle };
+    },
+  },
+
+  getPageTitle: {
+    description: `Returns the open page's title. Blank means the page uses the project title`,
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
+    parameters: { type: 'object', properties: {} },
+    handler: async () => ({ success: true, title: state.designer.target.head.querySelector('title')?.textContent ?? '' }),
+  },
+
+  setPageTitle: {
+    description: `Sets the open page's title. Blank makes the page use the project title`,
+    disabled: () => [
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.target?.decoration && `Decoration pages have no title.`,
+      state.designer.target?.preview && `Can't edit in preview mode.`,
+      state.collab.uid !== 'master' && `Peers can't change page titles.`,
+    ],
+    parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
+    handler: async ({ title } = {}) => {
+      let frame = state.designer.target;
+      let el = frame.head.querySelector('title');
+      if (!el) frame.head.append(el = frame.doc.createElement('title'));
+      el.textContent = title ?? '';
+      await post('designer.save', frame);
+      await post('designer.flushSave', frame);
+      return { success: true, title: el.textContent };
+    },
+  },
+
   isPagePreview: {
     description: `Returns the open page's mode: preview (page runs live) or edit (visual editor)`,
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     parameters: { type: 'object', properties: {} },
-    handler: async () => ({ success: true, mode: state.designer.current?.preview ? 'preview' : 'edit' }),
+    handler: async () => ({ success: true, mode: state.designer.target?.preview ? 'preview' : 'edit' }),
   },
 
   setPagePreview: {
     description: `Switch the open page between preview (page runs live) and edit (visual editor) modes`,
     disabled: () => [
-      !state.designer.open && `Designer closed.`,
+      !state.designer.targetOpen && `Designer closed.`,
       state.collab.uid !== 'master' && `Peers can't toggle preview.`,
     ],
     parameters: {
@@ -2470,20 +2525,20 @@ let actions = window.actions = {
     },
     handler: async ({ mode } = {}) => {
       if (mode !== 'preview' && mode !== 'edit' && mode !== 'toggle') throw new Error('mode must be preview, edit, or toggle');
-      let current = state.designer.current?.preview ? 'preview' : 'edit';
+      let current = state.designer.target?.preview ? 'preview' : 'edit';
       if (mode === 'toggle') mode = current === 'preview' ? 'edit' : 'preview';
       if (mode !== current) await post('designer.togglePreview');
-      return { success: true, mode: state.designer.current?.preview ? 'preview' : 'edit' };
+      return { success: true, mode: state.designer.target?.preview ? 'preview' : 'edit' };
     },
   },
 
   replaceTextContent: {
     description: `If no text is provided, a single-line input modal is shown`,
     shortcut: 't',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, text: { type: 'string' } } },
     handler: async ({ cur = 'master', text } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prev = targets.map(x => x.textContent);
@@ -2508,10 +2563,10 @@ let actions = window.actions = {
   replaceMultilineTextContent: {
     description: `Replaces the selected element's content with multiline input; prompts textarea if no text is provided`,
     shortcut: 'T',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, text: { type: 'string' } } },
     handler: async ({ cur = 'master', text } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prev = targets.map(x => x.textContent);
@@ -2536,12 +2591,12 @@ let actions = window.actions = {
   setInputValue: {
     shortcut: '#',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`,
     ],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, value: { type: ['string', 'null'] }, expr: { type: ['string', 'null'] } } },
     handler: async ({ cur = 'master', value, expr } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(x => x && x.tagName === 'INPUT');
       if (!targets.length) return;
       let prevValues = targets.map(x => x.getAttribute('value'));
@@ -2586,10 +2641,10 @@ let actions = window.actions = {
 
   changeLinkUrl: {
     shortcut: 'H',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, url: { type: 'string' } } },
     handler: async ({ cur = 'master', url } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(x => x.tagName === 'A');
       if (!targets.length) return;
       let prev = targets.map(x => x.getAttribute('href'));
@@ -2615,10 +2670,10 @@ let actions = window.actions = {
 
   changeMediaSrc: {
     shortcut: 's',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, src: { type: ['string', 'null'] }, expr: { type: ['string', 'null'] } } },
     handler: async ({ cur = 'master', src, expr } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prevSrcs = targets.map(x => x.getAttribute('src'));
@@ -2750,10 +2805,10 @@ let actions = window.actions = {
   // TODO: Test if possible to create a "list gallery media" function and reply using the success object in a usable way.
   setMediaSrcFromGallery: {
     shortcut: 'S',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let [btn, url] = await showModal('MediaGalleryDialog');
       if (btn !== 'ok' || !url) return;
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setMediaSrcFromGallery', cur, url });
@@ -2835,7 +2890,7 @@ let actions = window.actions = {
   },
 
   changeMediaFromPexels: {
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, query: { type: 'string' } } },
     handler: async ({ cur = 'master', query = '' } = {}) => {
       let [btn, url] = await showModal('PexelsGalleryDialog', { query, mode: 'media' });
@@ -2846,10 +2901,10 @@ let actions = window.actions = {
 
   changeBackgroundUrl: {
     shortcut: 'b',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, url: { type: 'string' } } },
     handler: async ({ cur = 'master', url = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       let prev = targets.map(x => x.style.backgroundImage);
@@ -2875,10 +2930,10 @@ let actions = window.actions = {
 
   changeBackgroundFromGallery: {
     shortcut: 'B',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let [btn, url] = await showModal('MediaGalleryDialog');
       if (btn !== 'ok' || !url) return;
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'changeBackgroundFromGallery', cur, url });
@@ -2900,7 +2955,7 @@ let actions = window.actions = {
   },
 
   changeBackgroundFromPexels: {
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, query: { type: 'string' } } },
     handler: async ({ cur = 'master', query = '' } = {}) => {
       let [btn, url] = await showModal('PexelsGalleryDialog', { query, mode: 'background' });
@@ -2912,10 +2967,10 @@ let actions = window.actions = {
   setIfExpression: {
     description: `Sets conditional expression for displaying elements (prompts if not provided)`,
     shortcut: 'C',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (expr == null) {
@@ -2946,10 +3001,10 @@ let actions = window.actions = {
   setMapExpression: {
     description: `Sets map expression for repeating elements (prompts if not provided)`,
     shortcut: 'n',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (expr == null) {
@@ -2979,10 +3034,10 @@ let actions = window.actions = {
 
   setEventHandlers: {
     shortcut: 'E',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && state.designer.target.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master', handlers } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let el = frame.map.get(frame.cursors[cur][0]);
       if (!el) return;
       let prevHandlers = getElementEventHandlers(el);
@@ -3011,10 +3066,10 @@ let actions = window.actions = {
 
   addEventHandlers: {
     description: `Adds event handlers to the selected element without prompting.`,
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && state.designer.target.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, handlers: { type: 'array', items: { type: 'object' } } }, required: ['handlers'] },
     handler: async ({ cur = 'master', handlers } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let el = frame.map.get(frame.cursors[cur][0]);
       if (!el) return;
       let additions = normalizeEventHandlersInput(handlers);
@@ -3038,10 +3093,10 @@ let actions = window.actions = {
 
   removeEventHandlers: {
     description: `Removes specific event handlers from the selected element.`,
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && state.designer.target.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, events: { type: 'array', items: { type: 'string' } } }, required: ['events'] },
     handler: async ({ cur = 'master', events } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let el = frame.map.get(frame.cursors[cur][0]);
       if (!el) return;
       let names = Array.isArray(events) ? events.map(x => String(x).trim()).filter(Boolean) : [];
@@ -3065,10 +3120,10 @@ let actions = window.actions = {
 
   setComponent: {
     shortcut: 'V',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && state.designer.current.cursors[cur]?.length !== 1 && `A single element must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && state.designer.target.cursors[cur]?.length !== 1 && `A single element must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, component: { type: 'string' }, componentProps: { type: 'object' } } },
     handler: async ({ cur = 'master', component, componentProps } = {}) => {
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let el = frame.map.get(frame.cursors[cur][0]);
       if (!el) return;
       let prevComponent = el.getAttribute('wf-component');
@@ -3136,11 +3191,11 @@ let actions = window.actions = {
 
   setDisabledExpression: {
     shortcut: 'D',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && !state.designer.current.cursors[cur]?.length && `No elements selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && !state.designer.target.cursors[cur]?.length && `No elements selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' }, expr: { type: 'string' } } },
     handler: async ({ cur = 'master', expr = null } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'setDisabledExpression', cur, expr });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let targets = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!targets.length) return;
       if (expr == null) {
@@ -3170,11 +3225,11 @@ let actions = window.actions = {
   normalizeStylesUnion: {
     description: `Makes all selected elements have the union of their classes`,
     shortcut: 'Alt-u',
-    disabled: ({ cur = 'master' } = {}) => [!state.designer.open && `Designer closed.`, state.designer.open && (state.designer.current.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`],
+    disabled: ({ cur = 'master' } = {}) => [!state.designer.targetOpen && `Designer closed.`, state.designer.targetOpen && (state.designer.target.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'normalizeStylesUnion', cur });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let all = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!all.length) return;
       let targetKeys = all.map(x => frame.map.getKey(x));
@@ -3197,13 +3252,13 @@ let actions = window.actions = {
     description: `Makes all selected elements have the intersection of their classes`,
     shortcut: 'Alt-U',
     disabled: ({ cur = 'master' } = {}) => [
-      !state.designer.open && `Designer closed.`,
-      state.designer.open && (state.designer.current.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`,
+      !state.designer.targetOpen && `Designer closed.`,
+      state.designer.targetOpen && (state.designer.target.cursors[cur]?.length || 0) < 2 && `At least 2 elements must be selected.`,
     ],
     parameters: { type: 'object', properties: { cur: { type: 'string' } } },
     handler: async ({ cur = 'master' } = {}) => {
       if (state.collab.uid !== 'master') return state.collab.rtc.send({ type: 'cmd', k: 'normalizeStylesIntersect', cur });
-      let frame = state.designer.current;
+      let frame = state.designer.target;
       let all = frame.cursors[cur].map(x => frame.map.get(x)).filter(Boolean);
       if (!all.length) return;
       let targetKeys = all.map(x => frame.map.getKey(x));
@@ -3263,7 +3318,7 @@ let actions = window.actions = {
 
   refresh: {
     shortcut: 'r',
-    disabled: () => [!state.designer.open && `Designer closed.`],
+    disabled: () => [!state.designer.targetOpen && `Designer closed.`],
     codexHidden: () => true,
     handler: async () => {
       if (state.collab.uid !== 'master') return;
@@ -3275,7 +3330,7 @@ let actions = window.actions = {
 };
 
 function getTailwindColorInfo(prefix, cur = state.collab.uid) {
-  let frame = state.designer.current;
+  let frame = state.designer.target;
   let regex = prefix === 'bg' ? BG_COLOR_RE : TEXT_COLOR_RE;
   if (!frame) return { frame: null, elements: [], matches: [], regex };
   let ids = frame.cursors[cur] || [];
@@ -3457,21 +3512,6 @@ function filterEventHandlers(prev, names) {
   return prev.filter(h => !nameSet.has(h.name.toLowerCase()));
 }
 
-let ifeval = (fn, args) => new Promise((resolve, reject) => {
-  let frame = state.designer.current;
-  let iforigin = new URL(frame.el.src).origin;
-  let rpcid = crypto.randomUUID();
-  let body = fn.toString().replace(/^async\s*/, '').replace(/^[^(]*\([^)]*\)\s*=>\s*\{?/, '').replace(/\}$/, '').trim();
-  let listener = ev => {
-    if (ev.origin !== iforigin || ev.data.type !== 'eval:res' || ev.data.rpcid !== rpcid) return;
-    removeEventListener('message', listener);
-    if (ev.data.error) reject(new Error(ev.data.error));
-    else resolve(ev.data.result);
-  };
-  addEventListener('message', listener);
-  frame.el.contentWindow.postMessage({ type: 'eval', fn: body, rpcid, args }, iforigin);
-});
-
 function patchWfClass(el, { add = [], remove = [], replace = null }) {
   let attr = el.getAttribute('wf-class');
   if (!attr) return;
@@ -3488,6 +3528,72 @@ function patchWfClass(el, { add = [], remove = [], replace = null }) {
     newPieces.push(expr);
   }
   el.setAttribute('wf-class', newPieces.join(' '));
+}
+
+// Decoration projects: the page belongs to another site. A selected element can only be
+// changed if a hook covers it (extra classes only) or Webfoundry owns it (everything,
+// except operations that would reach outside an owned root into the site's DOM).
+let DECORATION_CLASS_ACTIONS = { addCssClasses: 'addClasses', removeCssClasses: 'removeClasses', replaceCssClasses: 'replaceClasses' };
+let DECORATION_HOOKED_OK = new Set(['toggleCssClass', 'toggleHue', 'setShade', 'toggleBgHue', 'setBgShade']);
+let DECORATION_INSERTS = { createNextSibling: 'after', createPrevSibling: 'before', createLastChild: 'lastChild', createFirstChild: 'firstChild', pasteNextSibling: 'after', pastePrevSibling: 'before', pasteLastChild: 'lastChild', pasteFirstChild: 'firstChild' };
+let DECORATION_OWNED_ROOT_BLOCKED = new Set(['createNextSibling', 'createPrevSibling', 'pasteNextSibling', 'pastePrevSibling', 'wrap', 'unwrap', 'changeHtml', 'changeElementTag']);
+let DECORATION_GATED = [
+  ...Object.keys(DECORATION_CLASS_ACTIONS), ...DECORATION_HOOKED_OK, ...DECORATION_OWNED_ROOT_BLOCKED,
+  'createFirstChild', 'createLastChild', 'changeElementId', 'deleteSelected', 'pasteFirstChild', 'pasteLastChild', 'changeInnerHtml',
+  'changeInputPlaceholder', 'changeFormMethod', 'toggleHidden', 'replaceTextContent', 'replaceMultilineTextContent', 'setInputValue',
+  'changeLinkUrl', 'changeMediaSrc', 'setMediaSrcFromGallery', 'changeMediaFromPexels', 'changeBackgroundUrl', 'changeBackgroundFromGallery',
+  'changeBackgroundFromPexels', 'setIfExpression', 'setMapExpression', 'setEventHandlers', 'addEventHandlers', 'removeEventHandlers',
+  'setComponent', 'setDisabledExpression', 'normalizeStylesUnion', 'normalizeStylesIntersect',
+];
+
+let decorationKinds = cur => {
+  let frame = state.designer.target;
+  if (!frame?.decoration) return null;
+  return (frame.cursors[cur] || []).map(id => {
+    let el = frame.map.get(id);
+    let owned = el?.closest('[data-wf-owned]');
+    if (owned) return owned === el ? 'ownedRoot' : 'owned';
+    return el?.hasAttribute('data-wfd-hook') ? 'hooked' : 'site';
+  });
+};
+
+function decorationBlock(key, kinds) {
+  if (kinds.includes('site')) return `Create a hook for this element first.`;
+  if (kinds.includes('hooked') && !DECORATION_CLASS_ACTIONS[key] && !DECORATION_HOOKED_OK.has(key) && !DECORATION_INSERTS[key]) return `Hooked elements only accept added classes and inserted elements.`;
+  if (kinds.includes('ownedRoot') && DECORATION_OWNED_ROOT_BLOCKED.has(key)) return `This would change the site's DOM around an inserted element.`;
+  return null;
+}
+
+for (let key of DECORATION_GATED) {
+  let action = actions[key];
+  let { handler, disabled } = action;
+  let curOf = args => args?.cur ?? state.collab.uid;
+  action.disabled = args => {
+    let kinds = decorationKinds(curOf(args));
+    return [...(disabled?.(args) || []), kinds && decorationBlock(key, kinds)];
+  };
+  action.handler = async (args = {}) => {
+    let cur = curOf(args);
+    let kinds = decorationKinds(cur);
+    if (!kinds?.length) return await handler(args);
+    let why = decorationBlock(key, kinds);
+    if (why) return { success: false, error: why };
+    if (DECORATION_CLASS_ACTIONS[key] && kinds.includes('hooked')) {
+      if (kinds.some(x => x !== 'hooked')) return { success: false, error: `Select only hooked elements, or only inserted ones.` };
+      let cls = key === 'replaceCssClasses' ? [args.old, args.cls] : [args.cls];
+      return await post(`decoration.${DECORATION_CLASS_ACTIONS[key]}`, cur, ...cls);
+    }
+    if (DECORATION_INSERTS[key] && kinds.includes('hooked')) {
+      if (kinds.length !== 1) return { success: false, error: `Select a single hooked element.` };
+      let html = args.html;
+      if (key.startsWith('paste')) html = state.designer.clipboards[cur] || localStorage.getItem('webfoundry:clipboard');
+      if (key.startsWith('paste') && !html) return;
+      return await post('decoration.insert', DECORATION_INSERTS[key], { cur, tag: args.tag, html, i: args.i });
+    }
+    if (key === 'deleteSelected' && kinds.every(x => x === 'ownedRoot')) return await post('decoration.deleteSelectedInserts', cur);
+    if (key === 'deleteSelected' && kinds.includes('ownedRoot')) return { success: false, error: `Select only inserted roots, or only their contents.` };
+    return await handler(args);
+  };
 }
 
 export default actions;

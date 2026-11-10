@@ -1,6 +1,12 @@
 // Shared wf command parsing and result text. The CLI and the in-browser shell both use this.
 
-export function parseWfInvocation(argv) {
+function agentCursor(cur) {
+  cur = String(cur);
+  return cur === 'master' || cur.includes('agent:') ? cur : `agent:${cur.replace(/[\/\s]+/g, '_')}`;
+}
+
+// defaultCur is the cursor used without --cur. The CLI passes one per agent; the in-browser shell keeps master.
+export function parseWfInvocation(argv, { defaultCur = 'master' } = {}) {
   let verbose = false;
   let [subcmd, ...rest0] = argv;
   let rest = [...rest0];
@@ -17,7 +23,11 @@ export function parseWfInvocation(argv) {
   }
   try {
     let { flags, positionals } = parseFlags(rest);
-    return { help: false, verbose, spec, subcmd, command: spec.build({ flags, positionals }) };
+    let command = spec.build({ flags, positionals });
+    if (flags.page) command.params = { ...command.params, page: flags.page.replace(/^\.\//, '') };
+    if (flags.target) command.params = { ...command.params, target: splitList(flags.target) };
+    if (command.params?.cur != null) command.params.cur = agentCursor(flags.cur == null ? defaultCur : command.params.cur);
+    return { help: false, verbose, spec, subcmd, command, route: { instance: flags.instance, project: flags.project } };
   } catch (err) {
     err.verbose = verbose;
     throw err;
@@ -49,18 +59,25 @@ function helpText() {
     'Usage: wf [-v] <subcommand> [options]\n',
     'Global flags:',
     '  -v, --verbose        Print full error stacktraces on failure',
+    '  --page <path>        Run an HTML read/edit command on that page without opening it (loaded in the background if needed)',
+    '  --target <ids>       Comma-separated data-htmlsnap IDs to act on. Required on HTML edit commands',
+    '  --cur <id>           Designer cursor to use (default: WF_CURSOR, else one per agent session, else master)',
+    '  --instance <id>      Webfoundry instance to talk to, or a unique prefix of its id (default: WF_INSTANCE)',
+    '  --project <name>     Project to act on (default: the project containing the working directory)',
     'Available subcommands:',
   ];
   for (let [name, spec] of Object.entries(subcommands)) lines.push(`  ${name.padEnd(20)} ${spec.description}`);
   lines.push('\nExamples:');
   lines.push('  wf read-html');
   lines.push('  wf change-selection --ids section_1_a3 section_1_a4');
-  lines.push('  wf add-css-classes hero_title --classes "text-4xl font-bold"');
+  lines.push('  wf add-css-classes --target section_1_a3 --classes "text-4xl font-bold"');
   lines.push('  wf set-platform-preview desktop');
   lines.push('  wf is-platform-preview');
   lines.push('  wf set-platform-os lin');
   lines.push('  wf set-page-preview toggle');
   lines.push('  wf is-page-preview');
+  lines.push('  wf set-project-title "My App"');
+  lines.push('  wf set-page-title "About" --page pages/about.html');
   return lines.map(line => line + '\n').join('');
 }
 
@@ -78,15 +95,87 @@ let subcommands = {
     },
   },
   'create-file': {
-    description: 'Create a new project file using Webfoundry templates.',
-    build: ({ positionals }) => {
-      let path = positionals[0].replace(/^\.\//, '');
+    description: 'Create a new project file using Webfoundry templates. Pass --select to also open it in the IDE.',
+    build: ({ flags, positionals }) => {
+      let select = flags.select;
+      // `--select pages/x.html` reads the path as the flag's value.
+      if (select != null && !['true', 'false'].includes(select)) { positionals = [select, ...positionals]; select = 'true' }
+      let path = positionals[0]?.replace?.(/^\.\//, '');
       if (!path) throw new Error('Specify <path/file.ext> to create.');
-      return { name: 'createFile', params: { path } };
+      return { name: 'createFile', params: { path, select: select === 'true' } };
     },
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
-      io.log(`Created file: ${result?.path || 'OK'}`);
+      io.log(`Created file: ${result?.path || 'OK'}${result?.selected ? ' (selected)' : ''}`);
+    },
+  },
+  'list-editors': {
+    description: 'List the open visual editors, including background ones.',
+    build: () => ({ name: 'listEditors' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      for (let x of result.editors) {
+        let flags = [x.active && 'active', x.shadow && 'shadow', !x.ready && 'loading', x.preview && 'preview'].filter(Boolean);
+        io.log([x.path, flags.join(',') || '-', x.cursors.join(',') || '-'].join('\t'));
+      }
+    },
+  },
+  'instances': {
+    description: 'List connected Webfoundry instances and the project open on each.',
+    anyProject: true,
+    rpc: 'wf:instances',
+    build: () => ({ name: 'listInstances' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      for (let x of result.instances) io.log([x.id ?? '-', x.collab ? 'collab' : 'local', x.project ?? '-', x.origin ?? '-'].join('\t'));
+    },
+  },
+  'projects': {
+    description: 'List the projects visible on each instance and whether they are Companion FS-backed.',
+    anyProject: true,
+    fanOut: true,
+    build: () => ({ name: 'listProjects' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      for (let x of result.instances ?? [result]) {
+        io.log(`${x.id}${x.collab ? ' [collab]' : ''}`);
+        for (let y of x.projects) io.log(['  ' + y.name, y.storage ?? '-', y.open ? 'open' : '-'].join('\t'));
+      }
+    },
+  },
+  'open-project': {
+    description: 'Open a project on an instance.',
+    anyProject: true,
+    build: ({ positionals }) => {
+      if (!positionals[0]) throw new Error('Specify <project-name> to open.');
+      return { name: 'openProject', params: { name: positionals[0] } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Opened project: ${result.project}`);
+    },
+  },
+  'create-project': {
+    description: 'Create a new project on an instance and open it.',
+    anyProject: true,
+    build: ({ positionals }) => {
+      if (!positionals[0]) throw new Error('Specify <project-name> to create.');
+      return { name: 'createProject', params: { name: positionals[0] } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Created project: ${result.project}`);
+    },
+  },
+  'open': {
+    description: 'Open a new Webfoundry instance in the default browser.',
+    anyProject: true,
+    openBrowser: true,
+    build: ({ flags, positionals }) => ({ name: 'openInstance', params: { url: flags.url ?? positionals[0] } }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Opened: ${result.url}`);
+      io.log(result.instance ? `Instance: ${result.instance}` : 'No new instance connected yet. Is Companion enabled in its settings?');
     },
   },
   'read-html': {
@@ -286,6 +375,10 @@ let subcommands = {
       io.log(`Platform OS: ${result.os || 'web'}`);
     },
   },
+  'get-project-title': titleGetter('Print the project title.', 'getProjectTitle'),
+  'set-project-title': titleSetter('Set the project title.', 'setProjectTitle'),
+  'get-page-title': titleGetter('Print the open page title (blank means it uses the project title).', 'getPageTitle'),
+  'set-page-title': titleSetter('Set the open page title (blank makes it use the project title).', 'setPageTitle'),
   'is-page-preview': {
     description: 'Print the open page mode: preview (page runs live) or edit (visual editor).',
     build: () => ({ name: 'isPagePreview' }),
@@ -450,6 +543,26 @@ function splitList(value) {
       .forEach(val => out.push(val));
   }
   return out;
+}
+
+function printTitle(result, io, argv) {
+  if (!result?.success) return die(result, io, argv);
+  io.log(result.title);
+}
+
+function titleGetter(description, name) {
+  return { description, build: () => ({ name }), format: printTitle };
+}
+
+function titleSetter(description, name) {
+  return {
+    description,
+    build: ({ positionals }) => {
+      if (!positionals.length) throw new Error('Specify the title (use "" for blank).');
+      return { name, params: { title: positionals.join(' ') } };
+    },
+    format: printTitle,
+  };
 }
 
 function parseFlags(args) {

@@ -5,13 +5,19 @@ import diff from 'https://esm.run/fast-diff';
 import morphdom from 'https://esm.run/morphdom';
 import rfiles from '../repos/rfiles.js';
 import { FitAddon } from 'https://esm.run/xterm-addon-fit';
+import { ensureFrame, userAction, withPage } from '../other/shadowEditors.js';
 import { Terminal } from 'https://esm.run/xterm';
+import { touchAgentCursor } from './Companion.js';
 
 export default class Collab {
   state = {
     get uid() { return location.pathname !== '/collab.html' ? 'master' : this.rtc?.uid },
     ver: 0,
     rpcs: {},
+    follow: true, // Peers view the host's page until they open another one.
+    snaps: {}, // Peer: latest host snapshot per path, with the htmlsnap IDs commands resolve against.
+    peerPages: {}, // Host: the page each peer that stopped following has open.
+    sentPages: {}, // Host: what was last sent for each of those pages.
   };
 
   actions = {
@@ -31,16 +37,21 @@ export default class Collab {
         bus.on('shell:message:label', async () => await post('collab.sync'));
         bus.on('shell:message:stream', async ({ session, payload }) => this.state.rtc?.send?.({ type: 'shell:stream', session, payload }));
         bus.on('shell:close:ready', async () => await post('collab.sync'));
+        ['settings:openaiKey:changed', 'settings:xaiKey:changed', 'settings:global:option:ready'].forEach(x => bus.on(x, async () => await post('collab.sync')));
       } else {
         let room = location.hash.slice(1);
         if (!room) { location.href = '/'; return }
         this.state.rtc = new RealtimeCollab(room);
         this.state.rtc.events.on('sync', async ev => await post('collab.apply', ev));
+        this.state.rtc.events.on('page', async ev => await post('collab.applyPage', ev));
+        this.state.rtc.events.on('agent:delta', async ev => await post('agent.remoteDelta', ev));
+        this.state.rtc.events.on('agent:done', async ev => await post('agent.remoteDone', ev));
+        this.state.rtc.events.on('agent:open', async ev => await post('collab.open', ev.path));
         this.state.rtc.events.on('rpc:response', async ev => await post('collab.rpcResponse', ev));
         this.state.rtc.events.on('presence:leave', async () => {
           await post('collab.leave');
           state.event.bus.emit('collab:presence:update', { presence: this.state.rtc.presence });
-          if (!state.collab.rtc.presence.some(x => x.user === 'master')) { state.projects.current = null; state.files.list = []; this.state.sessionEnded = true }
+          if (!state.collab.rtc.presence.some(x => x.user === 'master')) { state.projects.current = null; state.files.list = []; this.state.sessionEnded = true; await post('agent.remoteDone', { error: 'The host left the session.' }) }
         });
         this.state.rtc.events.on('presence:update', async () => state.event.bus.emit('collab:presence:update', { presence: this.state.rtc.presence }));
         this.state.rtc.events.on('presence:join', async () => state.event.bus.emit('collab:presence:update', { presence: this.state.rtc.presence }));
@@ -59,8 +70,16 @@ export default class Collab {
       rtc.events.on('rpc:*', async ev => await post('collab.rpcInvoke', ev));
       rtc.events.on('changeSelection', async ev => await post('designer.changeSelection', ev.peer, ev.s.map(x => state.designer.current.map.get(x))));
       rtc.events.on('resize', async ev => { state.designer.frameWidth = ev.frameWidth; state.designer.frameHeight = ev.frameHeight; d.update() });
-      rtc.events.on('cmd', async ev => await actions[ev.k].handler({ cur: null, ...ev, cur: ev.peer }));
+      rtc.events.on('cmd', async ev => {
+        let cur = ev.cur?.startsWith?.(`${ev.peer}/`) ? ev.cur : ev.peer;
+        touchAgentCursor(cur);
+        let run = () => actions[ev.k].handler({ ...ev, cur });
+        let page = this.state.peerPages[ev.peer];
+        try { await (page ? withPage(page, run) : userAction(run)) }
+        catch (err) { console.error(err) }
+      });
       rtc.events.on('teardown', async () => await post('collab.leave'));
+      rtc.events.on('agent:prompt', async ev => await post('agent.peerPrompt', ev));
       await post('collab.sync', 'full');
     },
 
@@ -101,6 +120,7 @@ export default class Collab {
     },
 
     sync: async kind => {
+      await post('designer.assignCursorColors', ['master', ...(this.state.rtc?.presence || []).map(x => x.user)]);
       this.state.ver++;
       let snap = state.designer.open ? state.designer.current.snap : '';
       let delta;
@@ -122,6 +142,9 @@ export default class Collab {
         contents: kind === 'full' ? snap : undefined,
         delta,
         cursors: state.designer.current?.cursors || {},
+        cursorColors: state.designer.cursorColors,
+        fadedCursors: state.designer.fadedCursors,
+        agentAvailable: state.agent.available, // Only ever this boolean: API keys stay on the host.
         clipboards: state.designer.clipboards,
         shell: {
           open: state.shell.open,
@@ -135,6 +158,68 @@ export default class Collab {
           })),
         },
       });
+      await post('collab.syncPages');
+    },
+
+    // Pages peers have open besides the host's current one, which the regular sync covers.
+    syncPages: async () => {
+      if (!this.state.rtc) return;
+      for (let path of new Set(Object.values(this.state.peerPages))) {
+        if (path === state.files.current) continue;
+        let frame = state.designer.list.find(x => x.path === path);
+        if (!frame?.snap) continue;
+        let cursors = JSON.stringify([frame.cursors, state.designer.fadedCursors]);
+        let sent = this.state.sentPages[path];
+        if (sent?.snap === frame.snap && sent?.cursors === cursors) continue;
+        this.state.sentPages[path] = { snap: frame.snap, cursors };
+        this.state.rtc.send({ type: 'page', path, contents: sent?.snap !== frame.snap ? await gzbase64(JSON.stringify(frame.snap)) : undefined, cursors: frame.cursors, cursorColors: state.designer.cursorColors, fadedCursors: state.designer.fadedCursors });
+      }
+    },
+
+    // Peer: file access goes through the host, which owns the project's storage.
+    peerFile: async (op, project, path, arg) => {
+      switch (op) {
+        case 'list': return await post('collab.rpc', 'list', { project });
+        case 'load':
+          try { return await ungzblob(unb64(await post('collab.rpc', 'fetch', { project, path }))) }
+          catch (err) { if (/Not found/.test(err.message)) return null; throw err }
+        case 'save': return await post('collab.rpc', 'save', { project, path, data: await b64(await gzblob(arg)) });
+        case 'rm': return await post('collab.rpc', 'rm', { project, path });
+        case 'mv': return await post('collab.rpc', 'mv', { project, path, newPath: arg });
+        default: throw new Error(`Unknown file operation: ${op}`);
+      }
+    },
+
+    // Peer: opens any project file, independently of what the host has open.
+    open: async path => {
+      if (!path) return;
+      let project = state.projects.current;
+      if (path.endsWith('/')) {
+        this.state.ownTree = true;
+        if (state.files.expandedPaths.has(path)) state.files.expandedPaths.delete(path);
+        else state.files.expandedPaths.add(path);
+        return d.update();
+      }
+      let follow = path === this.state.hostCurrent;
+      let page = await post('collab.rpc', 'openPage', { project, path, follow });
+      this.state.follow = follow;
+      state.files.current = path;
+      await post('designer.select', path);
+      state.event.bus.emit('files:select:ready', { project, path });
+      if (page) await post('collab.applyPage', { path, contents: page.contents, cursors: page.cursors });
+      d.update();
+    },
+
+    applyPage: async ev => {
+      if (ev.contents) this.state.snaps[ev.path] = JSON.parse(await ungzbase64(ev.contents));
+      if (ev.cursorColors) state.designer.cursorColors = ev.cursorColors;
+      if (ev.fadedCursors) state.designer.fadedCursors = ev.fadedCursors;
+      let frame = state.designer.current;
+      if (ev.path !== state.files.current || !frame?.ready) return;
+      if (ev.contents) frame.el?.contentWindow?.postMessage?.({ type: 'update', html: this.state.snaps[ev.path] }, new URL(frame.el.src).origin);
+      frame.cursors = ev.cursors;
+      await post('designer.sync', frame);
+      state.event.bus.emit('collab:apply:ready', { content: !!ev.contents });
     },
 
     resizeSync: async () => this.state.rtc?.send?.({ type: 'resize', frameWidth: state.designer.frameWidth, frameHeight: state.designer.frameHeight }),
@@ -142,21 +227,28 @@ export default class Collab {
     apply: async ev => {
       if (ev.ver <= this.state.ver) return;
       this.state.ver = ev.ver;
+      if (ev.cursorColors) state.designer.cursorColors = ev.cursorColors;
+      if (ev.fadedCursors) state.designer.fadedCursors = ev.fadedCursors;
+      this.state.agentAvailable = !!ev.agentAvailable;
       state.projects.current = ev.project;
       state.files.list = ev.files;
-      state.files.expandedPaths = new Set(ev.expandedPaths);
-      let changedSelection = state.files.current !== ev.current;
-      if (changedSelection) {
+      if (!this.state.ownTree) state.files.expandedPaths = new Set(ev.expandedPaths);
+      this.state.hostCurrent = ev.current;
+      if (this.state.follow && state.files.current !== ev.current) {
         state.files.current = ev.current;
         await post('designer.select', ev.current);
       }
-      if (state.collab.uid !== 'master') {
+      let onHostPage = state.files.current === ev.current;
+      if (state.collab.uid !== 'master' && onHostPage) {
         state.event.bus.emit('files:select:ready', { project: ev.project, path: ev.current });
       }
       state.designer.frameWidth = ev.frameWidth;
       state.designer.frameHeight = ev.frameHeight;
-      if (state.designer.open && state.designer.current.preview !== ev.preview) await post('designer.togglePreview');
-      let applyHtmlUpdate = async html => state.designer.current?.el?.contentWindow?.postMessage?.({ type: 'update', html }, new URL(state.designer.current.el.src).origin);
+      if (onHostPage && state.designer.open && state.designer.current.preview !== ev.preview) await post('designer.togglePreview');
+      let applyHtmlUpdate = async html => {
+        this.state.snaps[ev.current] = html;
+        if (onHostPage) state.designer.current?.el?.contentWindow?.postMessage?.({ type: 'update', html }, new URL(state.designer.current.el.src).origin);
+      };
       if (ev.contents) {
         await applyHtmlUpdate(ev.contents);
         this.state.lastSnap = ev.contents;
@@ -166,7 +258,7 @@ export default class Collab {
         await applyHtmlUpdate(patched);
         this.state.lastSnap = patched;
       }
-      if (state.designer.open) {
+      if (onHostPage && state.designer.open) {
         // FIXME
         /*
         if (JSON.stringify(ev.cursors[state.collab.uid]) !== JSON.stringify(state.designer.current.cursors[state.collab.uid]) && ev.cursors[state.collab.uid].length) {
@@ -194,21 +286,22 @@ export default class Collab {
           for (let z of y.msgbuf || []) y.term.write(simpleunb64(z));
         }
       }
-      state.designer.open && await post('designer.sync', state.designer.current);
-      state.event.bus.emit('collab:apply:ready');
+      onHostPage && state.designer.open && await post('designer.sync', state.designer.current);
+      state.event.bus.emit('collab:apply:ready', { content: onHostPage && !!(ev.contents || ev.delta) });
     },
 
     leave: async () => {
       if (this.state.uid !== 'master' && !state.collab.rtc.presence.some(x => x.user === 'master')) state.files.current = null;
+      for (let k of Object.keys(this.state.peerPages)) if (!this.state.rtc?.presence?.find?.(x => x.user === k)) delete this.state.peerPages[k];
+      if (this.state.uid === 'master') await post('agent.prunePeers');
       if (!state.designer.open) return;
       for (let k of Object.keys(state.designer.current.cursors)) {
-        if (this.state.uid !== k && !this.state.rtc?.presence?.find?.(x => x.user === k)) {
-          let ovs = state.designer.current.overlays[k];
-          for (let x of ovs) x.disable();
-          delete state.designer.current.overlays[k];
-          delete state.designer.current.cursors[k];
-        }
+        // Keys are a peer's uid, <uid>/agent:<id> for that peer's agents, or agent:<id> for the host's.
+        let owner = k.split('/')[0];
+        if (owner.startsWith('agent:') || owner === this.state.uid || this.state.rtc?.presence?.find?.(x => x.user === owner)) continue;
+        state.designer.current.cursors[k] = []; // Emptied, not deleted: the iframe only drops overlays of keys it still sees.
       }
+      await post('designer.sync', state.designer.current);
       this.state.uid === 'master' && await post('collab.sync');
     },
   };
@@ -228,7 +321,30 @@ export default class Collab {
 
     save: async ({ project, path, data }) => {
       if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
-      await rfiles.save(project, path, await ungzblob(await unb64(data)));
+      let blob = await ungzblob(await unb64(data));
+      await rfiles.save(project, path, blob);
+      await post('codeEditor.externalWrite', { project, path, blob });
+    },
+
+    rm: async ({ project, path }) => {
+      if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
+      await rfiles.rm(project, path);
+    },
+
+    mv: async ({ project, path, newPath }) => {
+      if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
+      await rfiles.mv(project, path, newPath);
+    },
+
+    // A peer opened a file. HTML pages load as shadow editors here, so the host's own view doesn't change.
+    openPage: async ({ peer, project, path, follow }) => {
+      if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
+      if (follow || !path.endsWith('.html')) delete this.state.peerPages[peer];
+      if (!path.endsWith('.html')) return null;
+      let frame = await ensureFrame(path);
+      for (let i = 0; i < 200 && !frame.snap; i++) await new Promise(pres => setTimeout(pres, 25));
+      if (!follow) this.state.peerPages[peer] = path;
+      return { contents: await gzbase64(JSON.stringify(frame.snap)), cursors: frame.cursors };
     },
 
     codeEditorState: async ({ project, path }) => {

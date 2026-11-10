@@ -11,6 +11,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "ws": "^8.19.0"
+    "commander": "^15.1.0",
+    "ws": "^8.19.0",
+    "yaml": "^2.9.1"
   }
 }

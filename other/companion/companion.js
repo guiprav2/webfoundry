@@ -91,10 +91,37 @@ s.rpc('files:load', async ({ path }) => {
   catch (err) { if (err.code === 'ENOENT') return null; throw err }
 });
 
-s.rpc('files:save', async ({ ws, path, data }) => {
+// replace unlinks first (git objects are read-only), and append lets callers send files in chunks
+// that fit the WebSocket payload limit. Chunked callers should only pass mode with the last chunk.
+s.rpc('files:save', async ({ ws, path, data, mode, replace, append }) => {
   await mkdirp(path.split('/').slice(0, -1).join('/'));
-  await fsp.writeFile(path, Buffer.from(data, 'base64'));
+  if (replace) await fsp.rm(path, { force: true });
+  await fsp[append ? 'appendFile' : 'writeFile'](path, Buffer.from(data, 'base64'));
+  if (mode) await fsp.chmod(path, mode);
   markFileOp(ws, path);
+});
+
+s.rpc('files:mkdir', async ({ path }) => { await mkdirp(path) });
+
+// Lists everything inside the .git entries under root (repositories and submodule gitfiles), which
+// files:list leaves out. Directories are included because git needs refs/ and objects/ even when empty.
+// Symlinks are skipped. A .git under a gitignored directory is skipped along with that directory.
+s.rpc('files:gitEntries', async ({ path: root }) => {
+  let ignore = buildGlobIgnoresFromGitignore(root).filter(x => !/\/\.git\/\*\*$/.test(x));
+  let localIsIgnored = buildGitignoreMatcher(root);
+  let entries = [];
+  async function walk(p) {
+    let st = await fsp.lstat(p);
+    if (st.isSymbolicLink()) return;
+    if (!st.isDirectory()) return entries.push({ path: p, mode: st.mode & 0o777 });
+    entries.push({ path: p, dir: true });
+    for (let x of await fsp.readdir(p)) await walk(`${p}/${x}`);
+  }
+  for (let x of await glob(`${root}/**/.git`, { dot: true, ignore: [...ignore, `${root}/**/node_modules/**`] })) {
+    let parent = path.dirname(x);
+    if (parent === path.normalize(root) || !localIsIgnored(parent)) await walk(x);
+  }
+  return entries;
 });
 
 s.rpc('files:mv', async ({ path, newPath }) => await fsp.rename(path, newPath));
@@ -213,9 +240,19 @@ function buildGlobIgnoresFromGitignore(root) {
 }
 
 let isIgnored = buildGitignoreMatcher(workspace);
+
+// chokidar has no symlink cycle protection, so directory symlinks forming loops make it walk
+// and retain ever-longer logical paths until the heap runs out. Only top-level links (linked
+// projects) are followed, matching how files:list's glob treats symlinks.
+function isNestedDirSymlink(p) {
+  if (!p.startsWith(workspace + path.sep) || !p.slice(workspace.length + 1).includes(path.sep)) return false;
+  try { return fs.lstatSync(p).isSymbolicLink() && fs.statSync(p).isDirectory() }
+  catch { return false }
+}
+
 let watcher = chokidar.watch(workspace, {
   ignoreInitial: true,
-  ignored: p => /(^|[\\/])node_modules([\\/]|$)/.test(p) || isIgnored(p)
+  ignored: p => /(^|[\\/])node_modules([\\/]|$)/.test(p) || isIgnored(p) || isNestedDirSymlink(p)
 });
 ['add', 'change', 'unlink'].forEach(event => {
   watcher.on(event, path => {

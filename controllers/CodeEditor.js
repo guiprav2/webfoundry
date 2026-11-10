@@ -58,6 +58,7 @@ let decodeUpdate = encoded => {
 };
 
 let resolveColor = (name, alpha = 1) => {
+  if (name?.startsWith?.('hsl(')) return name.replace(')', ` / ${alpha})`);
   let hex = COLOR_MAP[name] || '#94a3b8';
   if (alpha >= 1) return hex;
   let r = parseInt(hex.slice(1, 3), 16);
@@ -215,7 +216,7 @@ export default class CodeEditor {
         lastSelectionBroadcastAt: 0,
       };
       doc.on('update', (update, origin) => this.handleYDocUpdate(entry, update, origin));
-      text.observe(() => this.handleYTextChange(entry));
+      text.observe((event, tx) => this.handleYTextChange(entry, tx));
       this.state.docs.set(key, entry);
     }
     return entry;
@@ -297,8 +298,12 @@ export default class CodeEditor {
     }
   };
 
-  handleYTextChange = entry => {
+  handleYTextChange = (entry, tx) => {
     if (this.state.currentProject !== entry.project || this.state.currentPath !== entry.path) {
+      // Only peers are editing this one: the doc keeps them in sync, and the host persists it unseen.
+      if ((state.collab?.uid == null || state.collab.uid === 'master') && tx?.origin !== 'bootstrap') {
+        this.scheduleHiddenSave(entry);
+      }
       return;
     }
     this.state.currentValue = entry.text.toString();
@@ -306,6 +311,28 @@ export default class CodeEditor {
     if (state.collab?.uid == null || state.collab.uid === 'master') {
       this.scheduleSave();
     }
+  };
+
+  scheduleHiddenSave = entry => {
+    entry.hiddenDirty = true;
+    clearTimeout(entry.hiddenSaveTimer);
+    entry.hiddenSaveTimer = setTimeout(() => this.flushHiddenSave(entry), 200);
+  };
+
+  flushHiddenSave = async entry => {
+    clearTimeout(entry.hiddenSaveTimer);
+    entry.hiddenSaving = (entry.hiddenSaving || Promise.resolve()).then(async () => {
+      if (!entry.hiddenDirty) return;
+      entry.hiddenDirty = false;
+      try {
+        await rfiles.save(entry.project, entry.path, new Blob([entry.text.toString()], { type: mimeLookup(entry.path) || 'text/plain' }));
+        state.event?.bus?.emit('files:change', { path: `${entry.project.split(':')[0]}/${entry.path}` });
+      } catch (err) {
+        entry.hiddenDirty = true;
+        console.error('CodeEditor hidden save failed', err);
+      }
+    });
+    await entry.hiddenSaving;
   };
 
   applyRemoteUpdate = async ({ project, path, update }) => {
@@ -440,7 +467,7 @@ export default class CodeEditor {
     let from = cm.posFromIndex(Math.min(anchor, head));
     let to = cm.posFromIndex(Math.max(anchor, head));
     let caretPos = cm.posFromIndex(head);
-    let presenceColor = state.collab?.rtc?.presence?.find?.(x => x.user === peer)?.color;
+    let presenceColor = state.designer?.cursorColors?.[peer] || state.collab?.rtc?.presence?.find?.(x => x.user === peer)?.color;
     let mark = null;
     if (anchor !== head) {
       mark = cm.markText(from, to, {
@@ -521,7 +548,7 @@ export default class CodeEditor {
     let valueLength = cm.getValue().length;
     let anchorIndex = Math.max(0, Math.min(anchor ?? 0, valueLength));
     let headIndex = Math.max(0, Math.min(head ?? anchorIndex, valueLength));
-    let colorName = state.collab?.rtc?.color || 'sky-600';
+    let colorName = state.designer?.cursorColors?.[state.collab?.uid] || state.collab?.rtc?.color || 'sky-600';
     let from = cm.posFromIndex(Math.min(anchorIndex, headIndex));
     let to = cm.posFromIndex(Math.max(anchorIndex, headIndex));
     let caretPos = cm.posFromIndex(headIndex);
@@ -798,6 +825,7 @@ export default class CodeEditor {
       try {
         let text = '';
         if (!state.collab?.uid || state.collab.uid === 'master') {
+          await this.flushHiddenSave(this.getDocEntry(project, path));
           let blob = await rfiles.load(project, path);
           if (!blob) {
             throw new Error('File not found');
@@ -901,8 +929,10 @@ export default class CodeEditor {
         return '';
       }
       let entry = this.getDocEntry(project, path);
-      if (!entry.initialized) {
+      // A file nobody here has open may have changed on disk since its doc was last used.
+      if (!entry.initialized || this.state.currentPath !== path || this.state.currentProject !== project) {
         try {
+          await this.flushHiddenSave(entry);
           let blob = await rfiles.load(project, path);
           let text = blob ? await blob.text() : '';
           await this.initializeDoc(entry, text);
@@ -913,6 +943,12 @@ export default class CodeEditor {
       }
       let update = Y.encodeStateAsUpdate(entry.doc);
       return encodeUpdate(update);
+    },
+
+    // A file was written outside the editor (e.g. by a peer's agent): keep its doc in step.
+    externalWrite: async ({ project, path, blob }) => {
+      let entry = this.state.docs.get(this.docKey(project, path));
+      if (entry?.initialized) await this.initializeDoc(entry, await blob.text());
     },
 
     change: async () => {},

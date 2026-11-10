@@ -6,7 +6,7 @@ import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
 import rprojects from '../repos/rprojects.js';
 import structuredFiles from '../other/structuredFiles.js';
-import { debounce, joinPath, loadman } from '../other/util.js';
+import { DECORATION_FILE, debounce, isDecorationPath, joinPath, loadman } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
 import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
@@ -53,7 +53,8 @@ export default class Files {
             if (!adwaitaRuntime) throw err;
           }
           // Projects created before adw-* support lack these runtime files; serve the IDE's copies.
-          if (!data && adwaitaRuntime) {
+          // ... and the designer bridge has to match this IDE, while project copies never update.
+          if ((!data && adwaitaRuntime) || path === 'webfoundry/ifdesigner.js') {
             let res = await fetch(path);
             if (res.ok) data = await res.blob();
           }
@@ -111,6 +112,7 @@ export default class Files {
         let target = this.state.autoSelectOnLoad;
         this.state.autoSelectOnLoad = null;
         if (!target || this.state.current) return;
+        if (this.state.list.some(x => joinPath(x[1], x[0]) === DECORATION_FILE)) target = DECORATION_FILE;
         let hasTarget = this.state.list.some(x => joinPath(x[1], x[0]) === target);
         if (!hasTarget) return;
         await post('files.select', target);
@@ -124,9 +126,9 @@ export default class Files {
           this.state.expandedPaths.add(partial);
         }
       });
-      bus.on('files:create:ready', async ({ path }) => {
+      bus.on('files:create:ready', async ({ path, select = true }) => {
         await post('files.load');
-        await post('files.select', path);
+        if (select) await post('files.select', path);
       });
       bus.on('files:mv:ready', async ({ path, newPath }) => {
         let { current } = this.state;
@@ -186,7 +188,7 @@ export default class Files {
     }))), 500),
 
     select: async path => {
-      if (state.collab.uid !== 'master') return;
+      if (state.collab.uid !== 'master') return await post('collab.open', path);
       let project = state.projects.current;
       let { bus } = state.event;
       bus.emit('files:select:start');
@@ -200,14 +202,15 @@ export default class Files {
       }
       d.updateSync();
       bus.emit('files:select:ready', { project, path });
-      if (path?.endsWith?.('.html')) await new Promise((pres, prej) => {
+      if (path?.endsWith?.('.html') || isDecorationPath(path)) await new Promise((pres, prej) => {
         if (state.designer.list.find(x => x.path === path && x.ready)) { return pres() }
         state.event.bus.on('designer:select:ready', () => pres());
         state.event.bus.on('designer:select:error', () => prej());
       });
     },
 
-    create: async (path, name, type = 'file') => {
+    // select: open the new file afterwards. Defaults on for the IDE, off for background (agent) creates.
+    create: async (path, name, type = 'file', { background = false, select = !background } = {}) => {
       let project = state.projects.current;
       let { bus } = state.event;
       bus.emit('files:create:start');
@@ -224,6 +227,7 @@ export default class Files {
       }
       let fullpath = path ? joinPath(path, name) : name;
       if (await rfiles.load(project, fullpath)) {
+        if (background) return { success: false, reason: `File already exists` };
         let [btn2] = await showModal('ConfirmationDialog', { title: 'File exists. Overwrite?' });
         if (btn2 !== 'yes') { bus.emit('files:create:abort', { project, path, name }); return { success: false, reason: `File already exists` } }
       }
@@ -242,8 +246,8 @@ export default class Files {
         let blob = new Blob([defaultContent], { type: mimeLookup(fullpath) });
         return await loadman.run('files.create', async () => {
           await rfiles.save(project, fullpath, blob);
-          bus.emit('files:create:ready', { project, path: fullpath });
-          return { success: true, note: `File created and selected (opened)` };
+          bus.emit('files:create:ready', { project, path: fullpath, select });
+          return { success: true, note: select ? `File created and selected (opened)` : `File created` };
         });
       } else {
         return await loadman.run('files.create', async () => {
@@ -306,6 +310,7 @@ export default class Files {
     },
 
     reflect: debounce(async () => {
+      if (state.collab.uid !== 'master') return; // The host owns the project's files.
       let { bus } = state.event;
       let project = state.projects.current;
       bus.emit('files:reflect:start', { project });
@@ -332,7 +337,7 @@ export default class Files {
       let { bus } = state.event;
       let project = state.projects.current;
       bus.emit('files:pull:start');
-      await rfiles.pull(project);
+      if (!await rfiles.pull(project)) return bus.emit('files:pull:abort', { project });
       await post('settings.projectOption', 'storage', 'cfs', true);
       await post('broadcast.publish', 'files:pull', { project });
       bus.emit('files:pull:ready');
@@ -672,6 +677,18 @@ async function importGitRepository(project, url, branch) {
     corsProxy: gitCorsProxy,
   });
   await persistGitFiles(project, pfs, dir, '');
+  await rfiles.importGit(project, await collectGitEntries(pfs, `${dir}/.git`, '.git'));
+}
+
+async function collectGitEntries(pfs, fullPath, relativePath, entries = []) {
+  let stat = await pfs.stat(fullPath);
+  if (stat?.type === 'dir') {
+    entries.push({ path: relativePath, dir: true });
+    for (let x of await pfs.readdir(fullPath)) await collectGitEntries(pfs, `${fullPath}/${x}`, `${relativePath}/${x}`, entries);
+  } else if (stat?.type === 'file') {
+    entries.push({ path: relativePath, blob: new Blob([await pfs.readFile(fullPath)]) });
+  }
+  return entries;
 }
 
 async function persistGitFiles(project, pfs, currentDir, prefix) {

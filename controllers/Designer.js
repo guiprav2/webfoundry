@@ -5,8 +5,23 @@ import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
 import morphdom from 'https://esm.run/morphdom';
 import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
-import { arrayify, debounce } from '../other/util.js';
+import { arrayify, debounce, framePost, isDecorationPath } from '../other/util.js';
 import { defaultHead } from '../other/templates.js';
+import { userAction } from '../other/shadowEditors.js';
+
+// Blue is reserved for master, so it's left out of the hues below.
+let MASTER_CURSOR_COLOR = 'hsl(213 94% 68%)';
+// Hues as far apart as possible, then the same hues in clearly different tones.
+let CURSOR_HUES = [0, 6, 3, 9, 1, 4, 10, 2, 8, 5, 11];
+let CURSOR_TONES = [[90, 55], [60, 30], [100, 80], [35, 55], [100, 40]];
+let CURSOR_HUE_OFFSETS = [0, 15, 7.5, 22.5];
+
+function cursorColor(i) {
+  let n = CURSOR_HUES.length;
+  let hue = CURSOR_HUES[i % n] * 30 + CURSOR_HUE_OFFSETS[Math.floor(i / (n * CURSOR_TONES.length)) % 4];
+  let [saturation, lightness] = CURSOR_TONES[Math.floor(i / n) % CURSOR_TONES.length];
+  return `hsl(${hue} ${saturation}% ${lightness}%)`;
+}
 
 let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone'];
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
@@ -70,6 +85,8 @@ export default class Designer {
 
     src(path) {
       let frame = this.list.find(x => x.path === path);
+      // about:blank until frameAttach has sandboxed the iframe, so the site never loads unsandboxed.
+      if (frame.decoration) return frame.attached ? frame.decoration.url : 'about:blank';
       let [name, uuid] = state.projects.current.split(':');
       if (frame.preview) path = path.slice('pages/'.length);
       let fullpath = `/${frame.preview ? 'preview' : 'files'}/${sessionStorage.webfoundryTabId}/${name}:${uuid}/${path}`;
@@ -89,9 +106,15 @@ export default class Designer {
 
     get current() { return this.list.find(x => x.path === state.files.current) },
     get open() { return this.current?.ready },
+    // The frame actions operate on: `current`, unless a page-targeted command is running (see other/shadowEditors.js).
+    scoped: null,
+    get target() { return this.scoped ?? this.current },
+    get targetOpen() { return this.target?.ready },
     frameWidth: 'calc(100% - 1rem)',
     frameHeight: '100%',
     clipboards: {},
+    cursorColors: { master: MASTER_CURSOR_COLOR }, // Handed out by the host in order of appearance, so every client agrees.
+    fadedCursors: [], // Idle agent cursors, decided by the host.
 
     // Rendered size of the single selected element ("300x200"), measured inside the page iframe.
     selSize: null,
@@ -154,12 +177,12 @@ export default class Designer {
             let done = x => { clearTimeout(timer); removeEventListener('message', listener); resolve(x) };
             let listener = ev => ev.origin === origin && ev.data?.type === 'eval:res' && ev.data.rpcid === rpcid && done(ev.data.result ?? null);
             addEventListener('message', listener);
-            frame.el.contentWindow.postMessage({ type: 'eval', rpcid, args: { id: s[0] }, fn: `
+            framePost(frame, { type: 'eval', rpcid, args: { id: s[0] }, fn: `
               let el = state.map?.get?.(args.id);
               if (!el?.getBoundingClientRect) return null;
               let r = el.getBoundingClientRect();
               return \`\${Math.round(r.width)}x\${Math.round(r.height)}\`;
-            ` }, origin);
+            ` });
           });
         } finally {
           frame.measuring = false;
@@ -202,7 +225,7 @@ export default class Designer {
       });
       bus.on('files:reflect:ready', async ({ project, templates }) => {
         if (state.projects.current !== project) return;
-        for (let x of this.state.list) x.el?.contentWindow?.postMessage?.({ type: 'templates', templates }, new URL(x.el.src).origin);
+        for (let x of this.state.list) if (!x.decoration) framePost(x, { type: 'templates', templates });
       });
       addEventListener('message', async ev => {
         if (location.origin !== ev.origin) {
@@ -213,61 +236,82 @@ export default class Designer {
           if (!/^webfoundry.app|webfoundry\d+\.netlify\.app|localhost$/.test(domain)) return;
           if (state.projects.current?.replaceAll?.(':', '-') !== project) return; // FIXME: Also check path.
         }
-        let project = state.projects.current;
-        let frame = this.state.list.find(x => x.path === ev.data.path);
-        switch (ev.data.type) {
-          case 'ready':
-            if (ev.data.status !== 200) return frame.reject(ev.data.error);
-            frame.ready = true;
-            frame.resolve();
-            await post('designer.applyPlatformPreview', frame);
-            await post('designer.sync', frame);
-            await post('files.reflect'); // For templates.
-            break;
-          case 'htmlsnap': {
-            this.state.current.snap = ev.data.snap;
-            let doc = new DOMParser().parseFromString(ev.data.snap, 'text/html');
-            if (!frame.doc) frame.doc = doc;
-            else {
-              morphdom(frame.doc.head, doc.head);
-              morphdom(frame.doc.body.firstElementChild, doc.body.firstElementChild);
-            }
-            htmlsnap(frame.doc.documentElement, { idtrack: true, map: frame.map });
-            state.collab.uid === 'master' && await post('designer.save', frame);
-            await post('designer.applyPlatformPreview', frame);
-            await post('designer.sync', frame);
-            d.update();
-            state.event.bus.emit('designer:htmlsnap:ready', { project, frame });
-            break;
-          }
-          case 'keydown': await post('designer.keydown', ev.data); break;
-          case 'action':
-            // ifdesigner preventDefault()s mousedown, so clicking the canvas never moves focus.
-            // When the editor is itself embedded (e.g. the landing page demo), focus would stay
-            // in the embedding page and our keydown shortcuts would never fire.
-            if (ev.data.key === 'changeSelection' && !document.hasFocus()) window.focus();
-            await actions[ev.data.key].handler(ev.data);
-            break;
-        }
+        await post('designer.frameMessage', ev.data);
       });
       addEventListener(state.app.mobile ? 'input' : 'keydown', async ev => await post('designer.keydown', ev), true);
       // Catch up on a file selected before our files:select:ready listener existed.
-      if (state.files.current?.endsWith?.('.html')) post('designer.select', state.files.current);
+      if (state.files.current?.endsWith?.('.html') || isDecorationPath(state.files.current)) post('designer.select', state.files.current);
     },
 
-    select: async path => {
-      if (this.state.list.find(x => x.path === path) || !path?.endsWith?.('.html')) return;
-      state.app.docs = false;
+    frameMessage: async data => {
+      let project = state.projects.current;
+      let frame = this.state.list.find(x => x.path === data.path);
+      if (!frame && /^(ready|htmlsnap)$/.test(data.type)) return; // A late message from a frame that was closed.
+      switch (data.type) {
+        case 'ready':
+          if (data.status !== 200) return frame.reject(data.error);
+          // A decoration frame opens on its first snapshot: listeners expect a mirror to exist.
+          if (frame.decoration) await post('decoration.frameReady', frame);
+          else { frame.ready = true; frame.resolve() }
+          await post('designer.applyPlatformPreview', frame);
+          await post('designer.sync', frame);
+          if (!frame.decoration) await post('files.reflect'); // For templates.
+          break;
+        case 'htmlsnap': {
+          frame.snap = data.snap;
+          let doc = new DOMParser().parseFromString(data.snap, 'text/html');
+          if (!frame.doc || frame.newPage) {
+            frame.doc = doc;
+            if (frame.newPage) frame.map = new BiMap();
+            frame.newPage = false;
+          } else {
+            morphdom(frame.doc.head, doc.head);
+            // A decorated site's body can have any number of root elements.
+            if (frame.decoration) morphdom(frame.doc.body, doc.body);
+            else morphdom(frame.doc.body.firstElementChild, doc.body.firstElementChild);
+          }
+          htmlsnap(frame.doc.documentElement, { idtrack: true, map: frame.map });
+          if (frame.decoration && !frame.ready) { frame.ready = true; frame.resolve() }
+          state.collab.uid === 'master' && await post('designer.save', frame);
+          await post('designer.applyPlatformPreview', frame);
+          await post('designer.sync', frame);
+          d.update();
+          state.event.bus.emit('designer:htmlsnap:ready', { project, frame });
+          break;
+        }
+        case 'keydown': await post('designer.keydown', data); break;
+        case 'action':
+          // ifdesigner preventDefault()s mousedown, so clicking the canvas never moves focus.
+          // When the editor is itself embedded (e.g. the landing page demo), focus would stay
+          // in the embedding page and our keydown shortcuts would never fire.
+          if (data.key === 'changeSelection' && !document.hasFocus()) window.focus();
+          await userAction(() => actions[data.key].handler(data));
+          break;
+      }
+    },
+
+    select: async (path, { shadow = false } = {}) => {
+      let existing = this.state.list.find(x => x.path === path);
+      if (existing && !shadow) existing.shadow = false; // The user opened it.
+      if (existing || !(path?.endsWith?.('.html') || isDecorationPath(path))) return;
+      if (!shadow) state.app.docs = false;
       d.update();
       let { bus } = state.event;
       let project = state.projects.current;
+      let decoration = null;
+      if (isDecorationPath(path)) {
+        decoration = await post('decoration.open');
+        if (!decoration) return bus.emit('designer:select:error', { project, path, err: new Error('Decoration extension unavailable') });
+      }
       let p = Promise.withResolvers();
       this.state.list.push({
         path,
+        decoration,
+        shadow,
         get html() { return this.doc?.documentElement },
         get head() { return this.doc?.head },
         get body() { return this.doc?.body },
-        get root() { return this.body?.firstElementChild },
+        get root() { return this.decoration ? this.body : this.body?.firstElementChild },
         preview: false,
         mutobs: null,
         snap: null,
@@ -282,6 +326,17 @@ export default class Designer {
       });
       d.update();
       setTimeout(() => p.reject(new Error(`Frame wait timeout`)), 30000);
+      if (shadow) { // Loads out of sight: no spinner or events, unless the user opened the page meanwhile.
+        let frame = this.state.list.find(x => x.path === path);
+        try { await p.promise; if (!frame.shadow) bus.emit('designer:select:ready', { project, path }) }
+        catch (err) {
+          console.error(err);
+          this.state.list = this.state.list.filter(x => x.path !== path);
+          d.update();
+          if (!frame.shadow) bus.emit('designer:select:error', { project, path, err });
+        }
+        return;
+      }
       await loadman.run('designer.select', async () => {
         try { await p.promise; bus.emit('designer:select:ready', { project, path }) }
         catch (err) { console.error(err); this.state.list = this.state.list.filter(x => x.path !== path); bus.emit('designer:select:error', { project, path, err }) }
@@ -294,26 +349,42 @@ export default class Designer {
       let frame = this.state.list.find(x => x.path === path);
       if (!frame) throw new Error(`Designer frame not found: ${path}`);
       frame.el = el;
+      if (frame.decoration) {
+        // Without allow-top-navigation, a site's framebuster can't navigate the editor away.
+        el.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock allow-presentation');
+        frame.attached = true;
+        d.update();
+      }
     },
 
     frameLoaded: async (path, err) => {
       let frame = this.state.list.find(x => x.path === path);
       if (!frame) throw new Error(`Designer frame not found: ${path}`);
       if (!frame.el) return; // ???
+      if (frame.decoration && !frame.attached) return;
       let { bus } = state.event;
       if (err) { frame.reject(err); bus.emit('designer:frame:error', { frame, err }); return }
       if (!frame.heightHooked) { d.el(frame.el, { style: { height: () => this.state.frameHeight } }); frame.heightHooked = true }
       bus.emit('designer:frameLoaded:ready', { frame });
     },
 
-    sync: frame => frame.el?.contentWindow?.postMessage?.({
+    // The host hands out colors; peers receive them through collab sync.
+    assignCursorColors: keys => {
+      if (state.collab.uid !== 'master') return;
+      let colors = this.state.cursorColors;
+      for (let k of keys) colors[k] ??= cursorColor(Object.keys(colors).length);
+    },
+
+    sync: frame => (this.actions.assignCursorColors(Object.keys(frame.cursors).filter(k => frame.cursors[k]?.length)), framePost(frame, {
       type: 'state',
+      cursorColors: this.state.cursorColors,
+      fadedCursors: this.state.fadedCursors,
       collab: { uid: state.collab.uid, rtc: { presence: state.collab.rtc?.presence } },
       cursors: frame.cursors,
       // Re-apply after ready/htmlsnap; isolate iframes cannot use contentDocument.
       platformPreview: platformForm(),
       platformOs: platformOs(),
-    }, new URL(frame.el.src).origin),
+    })),
 
     resize: ev => {
       ev.target.setPointerCapture(ev.pointerId);
@@ -366,7 +437,7 @@ export default class Designer {
 
     toolbar: async (k, params) => {
       if (/^(manipulation|tailwind)$/.test(k)) { this.state.toolbar = k; return }
-      await actions[k].handler({ cur: state.collab.uid, ...params });
+      await userAction(() => actions[k].handler({ cur: state.collab.uid, ...params }));
     },
 
     gfontCategory: x => { this.state.gfontCategory = x; this.state.gfonts = []; document.querySelector('#GFontFocus')?.focus?.() },
@@ -393,13 +464,16 @@ export default class Designer {
       if (ev.ctrlKey && ev.key !== 'Control') key = `Ctrl-${key}`;
       if (key === 'Control') key = 'Ctrl';
       let [k, cmd] = [...Object.entries(actions)].find(kv => arrayify(kv[1].shortcut).includes(key)) || [];
-      if (!cmd || cmd?.disabled?.({ cur: state.collab.uid })?.filter?.(Boolean)?.length) return;
-      ev?.preventDefault?.();
-      await cmd.handler({ cur: state.collab.uid });
+      if (!cmd) return;
+      await userAction(async () => {
+        if (cmd?.disabled?.({ cur: state.collab.uid })?.filter?.(Boolean)?.length) return;
+        ev?.preventDefault?.();
+        await cmd.handler({ cur: state.collab.uid });
+      });
     },
 
     pushHistory: async (cur, op) => {
-      let frame = this.state.current;
+      let frame = this.state.target;
       frame.history[cur] ??= [];
       frame.ihistory[cur] ??= 0;
       if (frame.history[cur].length > frame.ihistory[cur]) frame.history[cur].splice(frame.ihistory[cur], frame.history[cur].length);
@@ -412,6 +486,7 @@ export default class Designer {
     // page starve this one's saves), with a max wait so a page that keeps mutating
     // still gets flushed. Saves are chained per frame so they land in order.
     save: frame => {
+      if (frame.decoration) return; // Hooks persist through the decoration controller.
       clearTimeout(frame.saveDebounce);
       let project = state.projects.current;
       let now = Date.now();
@@ -450,6 +525,7 @@ export default class Designer {
 
     togglePreview: async () => {
       let frame = this.state.current;
+      if (frame.decoration) return await post('decoration.togglePreview');
       await post('designer.flushSave', frame);
       let p = Promise.withResolvers();
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject, preview: !frame.preview });
@@ -466,6 +542,7 @@ export default class Designer {
 
     refresh: async () => {
       let frame = this.state.current;
+      if (frame.decoration) return await post('decoration.reload');
       await post('designer.flushSave', frame);
       let p = Promise.withResolvers();
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject });
@@ -477,7 +554,7 @@ export default class Designer {
     // Isolate (default) is cross-origin — use ifdesigner eval + platformPreview message.
     applyPlatformPreview: (frame = this.state.current) => {
       let win = frame?.el?.contentWindow;
-      if (!win || !frame?.el?.src) return;
+      if (!win || !frame?.el?.src || frame.decoration) return;
       let mode = platformForm();
       let os = platformOs();
       let origin = new URL(frame.el.src).origin;

@@ -4,6 +4,43 @@ window.tap = x => (console.log(x), x);
 
 export let resolve = x => (typeof x === 'function' ? x() : x);
 
+// Decoration projects (see controllers/Decoration.js) keep their hooks in this file.
+export let DECORATION_FILE = 'site.decoration.json';
+export let isDecorationPath = path => path === DECORATION_FILE;
+
+export function normalizeOrigin(value) {
+  let text = String(value ?? '').trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = `https://${text}`;
+  try {
+    let url = new URL(text);
+    return /^https?:$/.test(url.protocol) && url.hostname ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+// Decoration frames hold another site, reachable only through the Firefox extension.
+export function framePost(frame, msg) {
+  if (frame.decoration) return window.postMessage({ wfDecorateBridge: true, type: 'down', json: JSON.stringify(msg) }, location.origin);
+  if (frame.el?.contentWindow) frame.el.contentWindow.postMessage(msg, new URL(frame.el.src).origin);
+}
+
+// fn must be a block-bodied function: its source text becomes the body run inside the frame.
+export let ifeval = (fn, args) => new Promise((resolve, reject) => {
+  let frame = state.designer.target;
+  let iforigin = new URL(frame.el.src).origin;
+  let rpcid = crypto.randomUUID();
+  let body = fn.toString().replace(/^async\s*/, '').replace(/^[^(]*\([^)]*\)\s*=>\s*\{?/, '').replace(/\}$/, '').trim();
+  let listener = ev => {
+    if (ev.origin !== iforigin || ev.data.type !== 'eval:res' || ev.data.rpcid !== rpcid) return;
+    removeEventListener('message', listener);
+    if (ev.data.error) reject(new Error(ev.data.error));
+    else resolve(ev.data.result);
+  };
+  addEventListener('message', listener);
+  framePost(frame, { type: 'eval', fn: body, rpcid, args });
+});
+
 export function arrayify(x, opt = null) {
   if (Array.isArray(x)) return x;
   if (x === undefined || (opt === 'nonull' && x === null)) return [];

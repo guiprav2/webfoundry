@@ -1,6 +1,7 @@
 'use strict';
 
-let exports = (window.d = {});
+let exports = {};
+if (!document.documentElement.hasAttribute('data-wf-decorating')) window.d = exports;
 var boundNodes = [];
 var ieNodes = navigator.userAgent.indexOf('Trident') ? [] : null;
 

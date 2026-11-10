@@ -75,13 +75,17 @@ export default class Settings {
     },
 
     fetchProjectTitle: async () => {
-      let index = new DOMParser().parseFromString(await (await rfiles.load(state.projects.current, 'index.html')).text(), 'text/html');
+      let blob = await rfiles.load(state.projects.current, 'index.html');
+      if (!blob) return; // Decoration projects have no index.html.
+      let index = new DOMParser().parseFromString(await blob.text(), 'text/html');
       this.state.projectTitle = index.head?.querySelector?.('title')?.textContent;
     },
 
     projectTitleChanged: async () => {
       let project = state.projects.current;
-      let index = new DOMParser().parseFromString(await (await rfiles.load(project, 'index.html')).text(), 'text/html');
+      let blob = await rfiles.load(project, 'index.html');
+      if (!blob) return;
+      let index = new DOMParser().parseFromString(await blob.text(), 'text/html');
       if (!index.head) index.documentElement.insertAdjacentHTML('afterbegin', '<head></head>');
       if (!index.head.querySelector('title')) index.head.insertAdjacentHTML('beforeend', '<title></title>');
       index.head.querySelector('title').textContent = this.state.projectTitle;

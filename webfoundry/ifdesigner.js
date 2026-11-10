@@ -4,10 +4,28 @@ import d from './dominant.js';
 import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
 import morphdom from 'https://esm.run/morphdom';
 
-window.state = { map: new BiMap(), cursors: {}, overlays: {} };
-let wforigin = new URL(location.href).searchParams.get('isolate') || location.origin;
+// Injected by the Firefox extension into another site (Decoration projects): no page globals,
+// and traffic goes through the extension instead of parent.postMessage.
+let decoratingFor = document.documentElement.getAttribute('data-wf-decorating');
+let decorating = decoratingFor != null;
+let state = { map: new BiMap(), cursors: {}, overlays: {} };
+if (!decorating) window.state = state;
+// htmlsnap needs randomUUID, which plain-HTTP sites don't have.
+if (decorating && !crypto.randomUUID) {
+  crypto.randomUUID = () => '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16));
+}
+let wforigin = decorating ? decoratingFor : new URL(location.href).searchParams.get('isolate') || location.origin;
 if (/^(\w+\.)?(webfoundry.app|webfoundry\d+\.netlify\.app|localhost)$/.test(wforigin)) throw new Error(`Bad isolation origin`);
-let post = data => parent.postMessage({ path: null, ...data, path: location.pathname.slice(1).split('/').slice(3).join('/') }, wforigin);
+let post = decorating
+  ? data => window.postMessage({ wfDecorate: 'up', json: JSON.stringify(data) }, location.origin)
+  : data => parent.postMessage({ path: null, ...data, path: location.pathname.slice(1).split('/').slice(3).join('/') }, wforigin);
+if (decorating) {
+  // Bridge deliveries re-enter as ordinary messages from Webfoundry, so every listener below applies.
+  addEventListener('message', ev => {
+    if (ev.source !== window || ev.data?.wfDecorate !== 'down') return;
+    dispatchEvent(new MessageEvent('message', { data: JSON.parse(ev.data.json), origin: wforigin }));
+  });
+}
 let components = {};
 
 // Platform variants. Each is a condition on the element itself (`&:is(html[…] *)`)
@@ -107,18 +125,24 @@ function scrollWithinFrame(el, { block = 'nearest', inline = 'nearest' } = {}) {
 addEventListener('message', async ev => {
   let { type, ...rest } = ev.data;
   if (type !== 'state' || ev.origin !== wforigin) return;
-  if (state.collab?.uid && JSON.stringify(state.cursors[state.collab.uid]) !== JSON.stringify(rest.cursors[state.collab.uid])) {
+  let uid = state.collab?.uid;
+  let changed = k => rest.cursors?.[k]?.length && JSON.stringify(state.cursors[k]) !== JSON.stringify(rest.cursors[k]);
+  // Follow our own selection; while we have none, follow whichever agent just changed its selection.
+  let follow = uid && (JSON.stringify(state.cursors[uid]) !== JSON.stringify(rest.cursors?.[uid]) ? uid
+    : !rest.cursors?.[uid]?.length && Object.keys(rest.cursors || {}).filter(k => /(^|\/)agent:/.test(k) && changed(k)).at(-1));
+  if (follow) {
     let scroll = () => {
-      let first = state.map.get(rest.cursors[state.collab.uid]?.at?.(-1));
+      let first = state.map.get(rest.cursors[follow]?.at?.(-1));
       let rect = first?.getBoundingClientRect?.();
       let visible = rect && rect.top >= 20 && rect.bottom <= innerHeight - 20;
       !visible && first && scrollWithinFrame(first, { block: rect.height <= innerHeight ? 'center' : 'nearest', inline: rect.width <= innerWidth ? 'center' : 'nearest' });
     };
-    state.collab.uid === 'master' ? scroll() : setTimeout(scroll, 500);
+    uid === 'master' ? scroll() : setTimeout(scroll, 500);
   }
   if ('platformPreview' in rest) applyPlatformPreview(normalizePlatformPreview(rest.platformPreview), normalizePlatformOs(rest.platformOs, rest.platformPreview));
   else if ('nativePreview' in rest) applyPlatformPreview(rest.nativePreview ? 'desktop' : 'off');
   Object.assign(state, rest);
+  d.update();
 });
 addEventListener('message', async ev => {
   if (ev.data.type !== 'platformPreview' || ev.origin !== wforigin) return;
@@ -169,27 +193,41 @@ function expandComponents() {
     // FIXME: state.map.set(state.map.getKey(x), c);
   }
 }
-addEventListener('click', ev => ev.preventDefault());
-addEventListener('mousedown', async ev => {
-  if (ev.button !== 0) return;
-  document.activeElement.blur();
-  ev.preventDefault();
-  let { target } = ev;
-  let croot = target.closest('[wf-component]');
-  if (croot) target = croot;
-  if (!ev.shiftKey) post({ type: 'action', key: 'changeSelection', cur: state.collab.uid, s: [state.map.getKey(target)] });
-  else post({ type: 'action', key: 'changeSelection', cur: state.collab.uid, s: [...new Set([...state.cursors[state.collab.uid] || [], state.map.getKey(target)])] });
+if (!decorating) {
+  addEventListener('click', ev => ev.preventDefault());
+  addEventListener('mousedown', async ev => {
+    if (ev.button !== 0) return;
+    document.activeElement.blur();
+    ev.preventDefault();
+    let { target } = ev;
+    let croot = target.closest('[wf-component]');
+    if (croot) target = croot;
+    if (!ev.shiftKey) post({ type: 'action', key: 'changeSelection', cur: state.collab.uid, s: [state.map.getKey(target)] });
+    else post({ type: 'action', key: 'changeSelection', cur: state.collab.uid, s: [...new Set([...state.cursors[state.collab.uid] || [], state.map.getKey(target)])] });
+  });
+}
+addEventListener('keydown', ev => {
+  if (decorating && state.decorate?.preview) return;
+  post({ type: 'keydown', key: ev.key, ctrlKey: ev.ctrlKey, shiftKey: ev.shiftKey });
 });
-addEventListener('keydown', ev => post({ type: 'keydown', key: ev.key, ctrlKey: ev.ctrlKey, shiftKey: ev.shiftKey }));
 async function trackCursors() {
   requestAnimationFrame(async () => await trackCursors());
   if (!document.body) return; // document.open
+  for (let k of Object.keys(state.overlays)) {
+    if (state.cursors[k]) continue;
+    for (let x of state.overlays[k]) x.disable();
+    delete state.overlays[k];
+  }
   for (let [k, ids] of Object.entries(state.cursors)) {
     let ovs = (state.overlays[k] ??= []);
     while (ids.length > ovs.length) {
       let i = ovs.length;
-      let p = state.collab.rtc?.presence?.find?.(x => x.user === k);
-      let o = d.el('div', { class: ['wf-cursor hidden z-1000 pointer-events-none', () => !p ? 'border border-blue-400' : `border border-${p.color}`] });
+      let color = () => state.cursorColors?.[k] ?? '';
+      // The border is a child so its fade doesn't compete with Boo's transition class on the overlay.
+      let o = d.el('div', { class: 'wf-cursor hidden z-1000 pointer-events-none' }, d.el('div', {
+        class: ['absolute inset-0 transition-opacity', () => color() ? 'border' : 'border border-blue-400', () => state.fadedCursors?.includes(k) ? 'opacity-0' : ''],
+        style: { borderColor: color },
+      }));
       ovs.push(new Boo(o, () => state.map.get(state.cursors[k][i]), { transitionClass: 'transition-[left,right,top,bottom]' }));
     }
     while (ovs.length > ids.length) ovs.pop().disable();
@@ -202,6 +240,8 @@ let snap = () => {
   state.map = map;
   let doc = new DOMParser().parseFromString(snap, 'text/html');
   doc.querySelectorAll('.wf-cursor').forEach(x => x.remove());
+  // A site's scripts and styles can be huge and the editor's mirror never needs them.
+  if (decorating) doc.querySelectorAll('script, style, link, noscript, template, [data-wfd-ui]').forEach(x => x.remove());
   // Runtime-only platform preview chrome — never persist into the authored page.
   doc.documentElement.removeAttribute('wf-desktop-preview');
   doc.documentElement.removeAttribute('wf-mobile-preview');
@@ -216,7 +256,20 @@ let snap = () => {
   snap = state.snap = doc.documentElement.outerHTML;
   post({ type: 'htmlsnap', snap });
 };
-let mutobs = new MutationObserver(() => { expandComponents(); snap() });
+// Real sites mutate constantly, and each snapshot serializes the whole document.
+let snapTimer = null;
+let scheduleSnap = decorating ? () => { snapTimer ??= setTimeout(() => { snapTimer = null; snap() }, 250) } : snap;
+let mutobs = new MutationObserver(() => { expandComponents(); scheduleSnap() });
 mutobs.observe(document, { attributes: true, subtree: true, childList: true, characterData: true });
-snap();
-post({ type: 'ready', status: 200 });
+if (decorating) {
+  if (document.readyState === 'loading') await new Promise(resolve => addEventListener('DOMContentLoaded', resolve, { once: true }));
+  let { createRuntime } = await import('./ifdecorate.js');
+  state.decorate = createRuntime({ post, wforigin, morphdom, getId: el => state.map.getKey(el), moduleUrl: import.meta.url });
+  // The editor resets its mirror on ready, so the first snapshot has to come after it.
+  post({ type: 'ready', status: 200 });
+  snap();
+  state.decorate.reportUrl();
+} else {
+  snap();
+  post({ type: 'ready', status: 200 });
+}

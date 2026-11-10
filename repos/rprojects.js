@@ -41,7 +41,10 @@ class ProjectsRepository {
     let storage = this.storage(project);
     switch (storage) {
       case 'local': {
-        if (state.projects.list.filter(x => x.split(':')[1] === uuid).length <= 1) await Promise.all((await rfiles.list(project)).map(async x => await rfiles.rm(project, x)));
+        if (state.projects.list.filter(x => x.split(':')[1] === uuid).length <= 1) {
+          await Promise.all((await rfiles.list(project)).map(async x => await rfiles.rm(project, x)));
+          await rfiles.rmGit(project);
+        }
         break;
       }
       case 'cfs': await post('companion.rpc', 'files:rm', { path: name }); break;

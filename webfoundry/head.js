@@ -1,3 +1,26 @@
+(() => {
+// Keeps the page invisible until its styles are built, including pages the runtime mounts
+// after this script has booted (index.html has no authored display: none). An adopted
+// sheet leaves no trace in the DOM for snapshots or saves, and visibility keeps layout
+// measurable for wf-onattach handlers running in the meantime.
+let gate = null;
+if (document.adoptedStyleSheets) {
+  gate = new CSSStyleSheet();
+  gate.replaceSync('body { visibility: hidden !important }');
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, gate];
+}
+let revealTimer;
+let reveal = () => {
+  clearTimeout(revealTimer);
+  if (!document.body) return addEventListener('DOMContentLoaded', reveal, { once: true });
+  document.body.style.display = '';
+  if (gate) document.adoptedStyleSheets = document.adoptedStyleSheets.filter(x => x !== gate);
+};
+// Never leave a page blank because something it waits on hangs.
+revealTimer = setTimeout(reveal, 15000);
+// Pages under pages/ served at the site root set rootPrefix to '/', which wf.config.js
+// would turn into a protocol-relative //wf.uiconfig.json URL.
+if (window.rootPrefix === '/') window.rootPrefix = '';
 (async () => {
   {
     let script = document.createElement('script');
@@ -79,7 +102,7 @@
   }
   let cfg = (await import('../wf.config.js')).default;
   let promises = [];
-  let prefix = location.pathname.startsWith('/files/') ? '../' : '';
+  let prefix = /^\/(files|pages)\//.test(location.pathname) ? '../' : '';
   if (cfg.nerdfonts) {
     let link = document.createElement('link');
     link.className = 'wf-nf-link';
@@ -241,14 +264,38 @@
   {
     let preflight = document.createElement('style');
     preflight.className = 'wf-preflight';
-    preflight.textContent = `[hidden] { display: none !important } dialog { margin: auto } :empty { min-height: 1rem }`;
+    // :empty is layered (base) and zero-specificity, so any utility (Tailwind, adw-*,
+    // and-*, win-*) overrides it: unlayered rules beat every @layer, which broke e.g.
+    // Beer field inputs. Void/replaced elements are always :empty and need no minimum
+    // height. dialog { margin: auto } stays unlayered: in base, Tailwind's
+    // * { margin: 0 } would win and uncenter every dialog.
+    preflight.textContent = `[hidden] { display: none !important } dialog { margin: auto } @layer base { :where(:empty:not(input, textarea, select, hr, img, br, wbr, video, audio, canvas, iframe, embed, object, progress, meter)) { min-height: 1rem } }`;
     let ppreflight = Promise.withResolvers();
     preflight.onload = () => ppreflight.resolve('preflight');
     preflight.onerror = err => ppreflight.reject(err);
     promises.push(ppreflight.promise);
     document.head.append(preflight);
   }
-  await Promise.all(promises);
+  await Promise.allSettled(promises);
+  // The runtime mounts the page after this script boots, and only then do its theme classes show up.
+  let mounted = () => document.readyState !== 'loading' && [...document.body.children].some(x => !['SCRIPT', 'STYLE'].includes(x.tagName));
+  if (!mounted()) {
+    await new Promise(resolve => {
+      let check = () => { if (mounted()) { obs.disconnect(); removeEventListener('DOMContentLoaded', check); resolve() } };
+      let obs = new MutationObserver(check);
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+      addEventListener('DOMContentLoaded', check);
+    });
+  }
   let div = document.createElement('div'); document.body.append(div); div.remove();
-  document.body.style.display = '';
+  // A macrotask between rounds lets MutationObservers start any late theme load and queue its build.
+  let tick = () => new Promise(resolve => setTimeout(resolve));
+  for (let size = -1; size !== (window.wfThemeLoads?.size ?? 0);) {
+    size = window.wfThemeLoads?.size ?? 0;
+    await tick();
+    await Promise.allSettled([...(window.wfThemeLoads?.values() ?? [])]);
+    await tick();
+  }
+  await window.wfTailwindIdle?.();
+})().catch(err => console.error(err)).finally(reveal);
 })();

@@ -77,6 +77,7 @@ export default class Designer {
   state = {
     toolbar: 'manipulation',
     list: [],
+    demoHintDismissed: false, // In memory only, so a refresh shows the hint again.
 
     frameVisible(path) {
       let frame = this.list.find(x => x.path === path);
@@ -303,6 +304,11 @@ export default class Designer {
         decoration = await post('decoration.open');
         if (!decoration) return bus.emit('designer:select:error', { project, path, err: new Error('Decoration extension unavailable') });
       }
+      // The landing demo opens pages running, so visitors don't land on raw {{...}} templates.
+      // Preview renders from webfoundry/templates.json, which a brand-new project doesn't have yet.
+      let preview = !!state.app.demo && !shadow && !decoration;
+      if (preview) await post('files.reflect');
+      if (this.state.list.find(x => x.path === path)) return; // Opened meanwhile.
       let p = Promise.withResolvers();
       this.state.list.push({
         path,
@@ -312,7 +318,7 @@ export default class Designer {
         get head() { return this.doc?.head },
         get body() { return this.doc?.body },
         get root() { return this.decoration ? this.body : this.body?.firstElementChild },
-        preview: false,
+        preview,
         mutobs: null,
         snap: null,
         map: new BiMap(),
@@ -429,7 +435,7 @@ export default class Designer {
         this.state.mobileKeyboardInput = input;
         return input;
       })();
-      if (this.state.current.cursors[state.collab.uid]?.length && document.activeElement !== input) {
+      if (this.state.current?.cursors?.[state.collab.uid]?.length && document.activeElement !== input) {
         input.focus({ preventScroll: true });
         input.setSelectionRange?.(input.value.length, input.value.length);
       }
@@ -529,6 +535,7 @@ export default class Designer {
       await post('designer.flushSave', frame);
       let p = Promise.withResolvers();
       Object.assign(frame, { ready: false, resolve: p.resolve, reject: p.reject, preview: !frame.preview });
+      this.state.demoHintDismissed = true;
       d.update();
       setTimeout(() => p.reject(new Error(`Frame wait timeout`)), 30000);
       return await loadman.run('designer.togglePreview', async () => {
@@ -536,6 +543,20 @@ export default class Designer {
         state.event.bus.emit('designer:togglePreview:ready', { preview: frame.preview });
         return { success: true, note: frame.preview ? `Preview toggled on` : `Preview toggled off` };
       });
+    },
+
+    // Demo mode's "Click for edit mode" hint: pinned beside the Pause button (the icon sidebar
+    // scrolls, so it can't live inside it) and nudging left and right until the first toggle.
+    attachDemoHint: el => {
+      // `translate`, not `transform`: Tailwind v4's -translate-y-1/2 sets translate, and the two would add up.
+      el.animate([{ translate: '0 -50%' }, { translate: '8px -50%' }], { duration: 650, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
+      let place = () => {
+        if (!el.isConnected) return;
+        let r = document.querySelector('.IconsSidebar-pauseBtn')?.getBoundingClientRect?.();
+        if (r) Object.assign(el.style, { left: `${r.right + 10}px`, top: `${r.top + r.height / 2}px` });
+        requestAnimationFrame(place);
+      };
+      place();
     },
 
     reset: async () => { this.state.list = []; await post('designer.toggleMobileKeyboard') },

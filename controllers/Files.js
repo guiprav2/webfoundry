@@ -6,7 +6,7 @@ import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
 import rprojects from '../repos/rprojects.js';
 import structuredFiles from '../other/structuredFiles.js';
-import { DECORATION_FILE, debounce, isDecorationPath, joinPath, loadman } from '../other/util.js';
+import { DECORATION_FILE, debounce, isDecorationPath, joinPath, loadman, stripClarity } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
 import { lookup as mimeLookup } from 'https://esm.run/mrmime';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
@@ -59,6 +59,8 @@ export default class Files {
             if (res.ok) data = await res.blob();
           }
           if (!data) return callback({ type: 'fetch:res', project, path, status: 404, error: 'Not found' });
+          // Webfoundry's analytics tag, in projects created before clarity-in-user-projects: never run it in previews.
+          if (path === 'index.html') data = new Blob([stripClarity(await data.text())], { type: 'text/html' });
           callback({ type: 'fetch:res', project, path, status: 200, data });
         } catch (err) {
           console.error(err);
@@ -700,6 +702,8 @@ async function persistGitFiles(project, pfs, currentDir, prefix) {
     let stat = await pfs.stat(fullPath);
     if (stat?.type === 'file') {
       let data = await pfs.readFile(fullPath);
+      // Repos made with older Webfoundry versions (the landing demos among them) carry its analytics tag.
+      if (relativePath === 'index.html') data = stripClarity(new TextDecoder().decode(data));
       let blob = new Blob([data], { type: mimeLookup(relativePath) || 'application/octet-stream' });
       await rfiles.save(project, relativePath, blob);
     } else if (stat?.type === 'dir') {

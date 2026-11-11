@@ -661,17 +661,38 @@
                       >controllers / Counter.js
                       <span class="ml-auto text-[#a5a1b0]">JS</span>
                     </div>
-                    <div class="px-5 pt-4 leading-[1.95] whitespace-pre">
-                      <span class="text-[#a699f7]">export default class</span>
-                      <span class="text-[#eff5ff]">Counter</span> {<br />
-                      <span class="text-[#ffbd88]">state</span> = { count:
-                      <span class="text-[#c1ed81]">0</span> };<br />
-                      <span class="text-[#ffbd88]">increment</span>() {<br />
-                      <span class="text-[#eff5ff]">this</span
-                      >.state.count++;<br />
-                      }<br />}<br /><span class="text-[#667081]"
-                        >// {{state.count}}</span
-                      >
+                    <div class="px-5 pt-4 leading-[1.95] whitespace-nowrap">
+                      <div>
+                        <span class="text-[#a699f7]"
+                          >export&nbsp;default&nbsp;class</span
+                        >&nbsp;<span class="text-[#eff5ff]">Counter</span
+                        >&nbsp;{
+                      </div>
+                      <div>
+                        &nbsp;&nbsp;<span class="text-[#ffbd88]">state</span
+                        >&nbsp;=&nbsp;{&nbsp;count:&nbsp;<span
+                          class="text-[#c1ed81]"
+                          >0</span
+                        >&nbsp;};
+                      </div>
+                      <div>
+                        &nbsp;&nbsp;<span class="text-[#ffbd88]">actions</span
+                        >&nbsp;=&nbsp;{
+                      </div>
+                      <div>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="text-[#ffbd88]"
+                          >increment</span
+                        >:&nbsp;()&nbsp;=&gt;&nbsp;<span class="text-[#eff5ff]"
+                          >this</span
+                        >.state.count++,
+                      </div>
+                      <div>&nbsp;&nbsp;};</div>
+                      <div>}</div>
+                      <div>
+                        <span class="text-[#667081]"
+                          >//&nbsp;\{{state.counter.count}}</span
+                        >
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1221,23 +1242,21 @@
                       <div>
                         <span class="text-[#8b8b9d]">02</span> &nbsp; &nbsp;
                         <span class="text-[#ad97ff]">&lt;h2&gt;</span>Hey,
-                        <span class="text-[#d9ff7a]">{{user.name}}</span>!<span
-                          class="text-[#ad97ff]"
-                          >&lt;/h2&gt;</span
-                        >
+                        <span class="text-[#d9ff7a]">\{{state.app.user}}</span
+                        >!<span class="text-[#ad97ff]">&lt;/h2&gt;</span>
                       </div>
                       <div>
                         <span class="text-[#8b8b9d]">03</span> &nbsp; &nbsp;
                         <span class="text-[#ad97ff]">&lt;div</span>
-                        <span class="text-[#ffcd96]">wf-for</span>=<span
+                        <span class="text-[#ffcd96]">wf-map</span>=<span
                           class="text-[#b7e68c]"
-                          >"item of items"</span
+                          >"item of state.app.items"</span
                         ><span class="text-[#ad97ff]">&gt;</span>
                       </div>
                       <div>
                         <span class="text-[#8b8b9d]">04</span> &nbsp; &nbsp;
                         &nbsp; <span class="text-[#ad97ff]">&lt;span&gt;</span
-                        ><span class="text-[#d9ff7a]">{{item.title}}</span
+                        ><span class="text-[#d9ff7a]">\{{item.title}}</span
                         ><span class="text-[#ad97ff]">&lt;/span&gt;</span>
                       </div>
                       <div>

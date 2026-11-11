@@ -4712,6 +4712,16 @@
           </div>
         </div>
       </div>
+      <div
+        class="DemoEditHint fixed z-[60] -translate-y-1/2 pointer-events-none whitespace-nowrap rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-900 shadow-lg hidden"
+        wf-if="state.app.demo &amp;&amp; !state.designer.demoHintDismissed &amp;&amp; state.designer.open &amp;&amp; state.designer.current?.preview"
+        wf-onattach="post('designer.attachDemoHint', _1)"
+      >
+        <div
+          class="absolute top-1/2 size-2 -translate-y-1/2 rotate-45 bg-white -left-0.5 -mt-[1.5px]"
+        ></div>
+        Click for edit mode
+      </div>
     </div>
   </body>
 </html>

@@ -85,235 +85,6 @@
         </div>
 
         <div class="p-8 flex flex-col items-center gap-6">
-          <div class="text-3xl">HookDialog</div>
-          <div
-            id="HookDialog"
-            class="outline-none rounded-lg shadow-xl text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md w-[40rem] max-w-[90vw] text-sm"
-            wf-onattach="this.start()"
-            wf-ondetach="this.stop()"
-          >
-            <form
-              method="dialog"
-              class="flex flex-col gap-3 max-h-[80vh] overflow-y-auto"
-              wf-onsubmit="this.onSubmit(event)"
-            >
-              <div class="flex items-center gap-2">
-                <span class="font-mono">&lt;{{this.info.tag}}&gt;</span
-                ><input
-                  class="HookDialog-key font-mono flex-1 min-w-0 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                  placeholder="ID"
-                  autocapitalize="off"
-                  wf-value="this.key"
-                  value=""
-                />
-              </div>
-              <div
-                class="flex items-center gap-2"
-                wf-if="this.info.parents.length"
-              >
-                <span class="text-neutral-400 w-16 shrink-0">Inside</span
-                ><select
-                  class="HookDialog-parent flex-1 outline-none rounded px-1 py-1 bg-[#121d2b]"
-                  wf-value="this.parent"
-                  value=""
-                >
-                  <option value="" selected="">Page</option>
-                  <option
-                    wf-map="x of this.info.parents"
-                    wf-value="x.id"
-                    value=""
-                  >
-                    {{x.key}}
-                  </option>
-                </select>
-              </div>
-              <div class="flex flex-col gap-1">
-                <input
-                  class="HookDialog-css font-mono w-full outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                  placeholder="CSS"
-                  autocapitalize="off"
-                  wf-value="this.css"
-                  value=""
-                />
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    class="outline-none font-mono text-xs rounded px-1.5 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
-                    wf-map="x of this.info.cssCandidates"
-                    wf-onclick="this.css = x.css"
-                    value=""
-                  >
-                    {{x.css}} ({{x.count}})
-                  </button>
-                </div>
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="flex items-center gap-2"
-                  ><input
-                    type="checkbox"
-                    class="HookDialog-useText"
-                    wf-checked="this.useText"
-                    value="on"
-                  />Text</label
-                >
-                <div class="flex flex-col gap-1" wf-if="this.useText">
-                  <input
-                    class="w-full outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                    wf-value="this.textValue"
-                    value=""
-                  />
-                  <div class="flex items-center gap-2">
-                    <select
-                      class="outline-none rounded px-1 py-1 bg-[#121d2b]"
-                      wf-value="this.textMode"
-                      value=""
-                    >
-                      <option value="contains" selected="">Contains</option>
-                      <option value="exact">Exact</option>
-                      <option value="regex">Regex</option></select
-                    ><select
-                      class="outline-none rounded px-1 py-1 bg-[#121d2b]"
-                      wf-value="this.textSource"
-                      value=""
-                    >
-                      <option value="own" selected="">Own</option>
-                      <option value="full">Full</option>
-                      <option value="label">Label</option></select
-                    ><label class="flex items-center gap-1"
-                      ><input
-                        type="checkbox"
-                        wf-checked="this.ignoreCase"
-                        value="on"
-                      />Ignore case</label
-                    >
-                  </div>
-                </div>
-              </div>
-              <div class="flex flex-col gap-1" wf-if="this.attrs.length">
-                <div class="flex items-center gap-2" wf-map="x of this.attrs">
-                  <label
-                    class="flex items-center gap-2 min-w-0 flex-1 font-mono text-xs"
-                    ><input type="checkbox" wf-checked="x.on" value="on" /><span
-                      class="truncate"
-                      >{{x.name}}="{{x.value}}"</span
-                    ></label
-                  ><select
-                    class="outline-none rounded px-1 py-0.5 bg-[#121d2b] text-xs"
-                    wf-value="x.mode"
-                    value=""
-                  >
-                    <option value="exact" selected="">Equals</option>
-                    <option value="contains">Contains</option>
-                    <option value="present">Present</option>
-                  </select>
-                </div>
-              </div>
-              <div class="flex flex-col gap-1">
-                <div class="flex gap-2">
-                  <input
-                    class="flex-1 min-w-0 font-mono outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                    placeholder="Ancestor CSS"
-                    autocapitalize="off"
-                    wf-value="this.withinCss"
-                    value=""
-                  /><input
-                    class="flex-1 min-w-0 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                    placeholder="Ancestor text"
-                    wf-value="this.withinText"
-                    value=""
-                  />
-                </div>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    class="outline-none font-mono text-xs rounded px-1.5 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
-                    wf-map="x of this.info.ancestors"
-                    wf-onclick="this.withinCss = x.css"
-                    value=""
-                  >
-                    {{x.css}}
-                  </button>
-                </div>
-              </div>
-              <div class="flex gap-4">
-                <div class="flex flex-col gap-1 flex-1">
-                  <select
-                    class="HookDialog-matchMode outline-none rounded px-1 py-1 bg-[#121d2b]"
-                    wf-value="this.matchMode"
-                    value=""
-                  >
-                    <option value="single" selected="">One</option>
-                    <option value="nth">Nth</option>
-                    <option value="all">All</option>
-                  </select>
-                  <div
-                    class="flex items-center gap-2"
-                    wf-if="this.matchMode === 'nth'"
-                  >
-                    <input
-                      type="number"
-                      min="0"
-                      class="w-20 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                      wf-value="this.nth"
-                      value=""
-                    /><span class="text-neutral-400">{{this.nthHint}}</span>
-                  </div>
-                  <button
-                    type="button"
-                    class="outline-none self-start rounded px-2 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
-                    wf-if="this.result?.status === 'ambiguous' &amp;&amp; this.result.index &gt;= 0"
-                    wf-onclick="this.useNth()"
-                    value=""
-                  >
-                    Use #{{this.result.index}}
-                  </button>
-                </div>
-                <div class="flex flex-col gap-1 flex-1" wf-if="!this.parent">
-                  <select
-                    class="HookDialog-pages outline-none rounded px-1 py-1 bg-[#121d2b]"
-                    wf-value="this.pagesMode"
-                    value=""
-                  >
-                    <option value="path" selected="">This page</option>
-                    <option value="site">Site</option>
-                    <option value="glob">Paths</option></select
-                  ><input
-                    class="w-full font-mono outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
-                    placeholder="/products/*"
-                    autocapitalize="off"
-                    wf-if="this.pagesMode === 'glob'"
-                    wf-value="this.pagesValue"
-                    value=""
-                  />
-                </div>
-              </div>
-              <div class="HookDialog-summary" wf-class="{{this.summaryClass}}">
-                {{this.summary}}
-              </div>
-              <div class="flex gap-1.5">
-                <button
-                  value="cancel"
-                  class="flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#121d2b] hover:bg-[#1a2a40]"
-                >
-                  Cancel</button
-                ><button
-                  value="remove"
-                  class="flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#7f1d1d] hover:bg-[#991b1b]"
-                  wf-if="this.props.hook"
-                >
-                  Remove</button
-                ><button
-                  value="ok"
-                  class="HookDialog-ok flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#0071b2] hover:bg-[#008ad9] disabled:hover:bg-[#0071b2] disabled:opacity-50"
-                  wf-disabled="!this.valid"
-                >
-                  OK
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-        <div class="p-8 flex flex-col items-center gap-6">
           <div class="text-3xl">CreateProjectDialog</div>
           <div
             id="CreateProjectDialog"
@@ -794,55 +565,6 @@
               </div>
             </form>
           </div>
-          <div
-            id="OpenAIKeyDialog"
-            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
-          >
-            <form
-              method="dialog"
-              wf-onkeydown="this.onKeyDown(event)"
-              wf-onsubmit="this.onSubmit(event)"
-              class="flex flex-col gap-2.5"
-            >
-              <div class="">OpenAI API Key</div>
-              <div class="text-sm text-neutral-300">
-                Paste a secret key from platform.openai.com. It is stored
-                locally and never sent to Webfoundry servers.
-              </div>
-              <input
-                type="password"
-                placeholder="sk-shhh..."
-                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
-                value=""
-                wf-value="this.value"
-                wf-onattach="_1.focus()"
-              />
-              <div class="flex flex-wrap gap-2 justify-end items-center">
-                <button
-                  value=""
-                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
-                  wf-onclick="this.onRemove(event)"
-                  wf-if="this.props.key"
-                  type="button"
-                >
-                  Remove key</button
-                ><button
-                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
-                  value="cancel"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  value="ok"
-                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
-                  wf-disabled="!this.valid"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
         <div class="p-8 flex flex-col items-center gap-6">
           <div class="text-3xl">NetlifyApiKeyDialog</div>
@@ -886,55 +608,6 @@
                   wf-disabled="!this.valid"
                 >
                   OK
-                </button>
-              </div>
-            </form>
-          </div>
-          <div
-            id="OpenAIKeyDialog"
-            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
-          >
-            <form
-              method="dialog"
-              wf-onkeydown="this.onKeyDown(event)"
-              wf-onsubmit="this.onSubmit(event)"
-              class="flex flex-col gap-2.5"
-            >
-              <div class="">OpenAI API Key</div>
-              <div class="text-sm text-neutral-300">
-                Paste a secret key from platform.openai.com. It is stored
-                locally and never sent to Webfoundry servers.
-              </div>
-              <input
-                type="password"
-                placeholder="sk-shhh..."
-                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
-                value=""
-                wf-value="this.value"
-                wf-onattach="_1.focus()"
-              />
-              <div class="flex flex-wrap gap-2 justify-end items-center">
-                <button
-                  value=""
-                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
-                  wf-onclick="this.onRemove(event)"
-                  wf-if="this.props.key"
-                  type="button"
-                >
-                  Remove key</button
-                ><button
-                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
-                  value="cancel"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  value="ok"
-                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
-                  wf-disabled="!this.valid"
-                >
-                  Save
                 </button>
               </div>
             </form>
@@ -1041,10 +714,6 @@
               </div>
             </form>
           </div>
-        </div>
-        <div class="p-8 flex flex-col items-center gap-6">
-          <div class="text-3xl">XAIKeyDialog</div>
-
           <div
             id="OpenAIKeyDialog"
             class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
@@ -1094,6 +763,10 @@
               </div>
             </form>
           </div>
+        </div>
+        <div class="p-8 flex flex-col items-center gap-6">
+          <div class="text-3xl">XAIKeyDialog</div>
+
           <div
             id="XAIKeyDialog"
             class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
@@ -1112,6 +785,55 @@
               <input
                 type="password"
                 placeholder="xai-shhh..."
+                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
+                value=""
+                wf-value="this.value"
+                wf-onattach="_1.focus()"
+              />
+              <div class="flex flex-wrap gap-2 justify-end items-center">
+                <button
+                  value=""
+                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
+                  wf-onclick="this.onRemove(event)"
+                  wf-if="this.props.key"
+                  type="button"
+                >
+                  Remove key</button
+                ><button
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  value="cancel"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  value="ok"
+                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
+                  wf-disabled="!this.valid"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+          <div
+            id="OpenAIKeyDialog"
+            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+          >
+            <form
+              method="dialog"
+              wf-onkeydown="this.onKeyDown(event)"
+              wf-onsubmit="this.onSubmit(event)"
+              class="flex flex-col gap-2.5"
+            >
+              <div class="">OpenAI API Key</div>
+              <div class="text-sm text-neutral-300">
+                Paste a secret key from platform.openai.com. It is stored
+                locally and never sent to Webfoundry servers.
+              </div>
+              <input
+                type="password"
+                placeholder="sk-shhh..."
                 class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
                 value=""
                 wf-value="this.value"
@@ -1264,6 +986,55 @@
                   wf-disabled="!this.valid"
                 >
                   Deploy
+                </button>
+              </div>
+            </form>
+          </div>
+          <div
+            id="OpenAIKeyDialog"
+            class="outline-none rounded-lg shadow-xl w-96 text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md"
+          >
+            <form
+              method="dialog"
+              wf-onkeydown="this.onKeyDown(event)"
+              wf-onsubmit="this.onSubmit(event)"
+              class="flex flex-col gap-2.5"
+            >
+              <div class="">OpenAI API Key</div>
+              <div class="text-sm text-neutral-300">
+                Paste a secret key from platform.openai.com. It is stored
+                locally and never sent to Webfoundry servers.
+              </div>
+              <input
+                type="password"
+                placeholder="sk-shhh..."
+                class="w-full rounded px-3 py-2 bg-[#2b2d3130] outline-none"
+                value=""
+                wf-value="this.value"
+                wf-onattach="_1.focus()"
+              />
+              <div class="flex flex-wrap gap-2 justify-end items-center">
+                <button
+                  value=""
+                  class="rounded px-3 py-2 bg-transparent text-sm text-red-300 hover:text-red-200"
+                  wf-onclick="this.onRemove(event)"
+                  wf-if="this.props.key"
+                  type="button"
+                >
+                  Remove key</button
+                ><button
+                  class="rounded px-4 py-2 bg-[#121d2b] hover:bg-[#1a2a40] outline-none text-sm"
+                  value="cancel"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  value="ok"
+                  class="outline-none rounded bg-[#0071b2] hover:bg-[#008ad9] transition-colors disabled:opacity-50 disabled:hover:bg-[#0071b2] px-4 py-1"
+                  wf-disabled="!this.valid"
+                >
+                  Save
                 </button>
               </div>
             </form>
@@ -1952,6 +1723,235 @@
                   wf-disabled="!this.selectedUrl"
                 >
                   {{this.mode === 'background' ? 'Use as Background' : 'Use Image'}}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="p-8 flex flex-col items-center gap-6 col-span-2">
+          <div class="text-3xl">HookDialog</div>
+          <div
+            id="HookDialog"
+            class="outline-none rounded-lg shadow-xl text-neutral-100 p-3 pt-2 bg-[#091017e0] backdrop-blur-md w-[40rem] max-w-[90vw] text-sm"
+            wf-onattach="this.start()"
+            wf-ondetach="this.stop()"
+          >
+            <form
+              method="dialog"
+              class="flex flex-col gap-3 max-h-[80vh] overflow-y-auto"
+              wf-onsubmit="this.onSubmit(event)"
+            >
+              <div class="flex items-center gap-2">
+                <span class="font-mono">&lt;{{this.info.tag}}&gt;</span
+                ><input
+                  class="HookDialog-key font-mono flex-1 min-w-0 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                  placeholder="ID"
+                  autocapitalize="off"
+                  wf-value="this.key"
+                  value=""
+                />
+              </div>
+              <div
+                class="flex items-center gap-2"
+                wf-if="this.info.parents.length"
+              >
+                <span class="text-neutral-400 w-16 shrink-0">Inside</span
+                ><select
+                  class="HookDialog-parent flex-1 outline-none rounded px-1 py-1 bg-[#121d2b]"
+                  wf-value="this.parent"
+                  value=""
+                >
+                  <option value="" selected="">Page</option>
+                  <option
+                    wf-map="x of this.info.parents"
+                    wf-value="x.id"
+                    value=""
+                  >
+                    {{x.key}}
+                  </option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1">
+                <input
+                  class="HookDialog-css font-mono w-full outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                  placeholder="CSS"
+                  autocapitalize="off"
+                  wf-value="this.css"
+                  value=""
+                />
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    class="outline-none font-mono text-xs rounded px-1.5 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
+                    wf-map="x of this.info.cssCandidates"
+                    wf-onclick="this.css = x.css"
+                    value=""
+                  >
+                    {{x.css}} ({{x.count}})
+                  </button>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="flex items-center gap-2"
+                  ><input
+                    type="checkbox"
+                    class="HookDialog-useText"
+                    wf-checked="this.useText"
+                    value="on"
+                  />Text</label
+                >
+                <div class="flex flex-col gap-1" wf-if="this.useText">
+                  <input
+                    class="w-full outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                    wf-value="this.textValue"
+                    value=""
+                  />
+                  <div class="flex items-center gap-2">
+                    <select
+                      class="outline-none rounded px-1 py-1 bg-[#121d2b]"
+                      wf-value="this.textMode"
+                      value=""
+                    >
+                      <option value="contains" selected="">Contains</option>
+                      <option value="exact">Exact</option>
+                      <option value="regex">Regex</option></select
+                    ><select
+                      class="outline-none rounded px-1 py-1 bg-[#121d2b]"
+                      wf-value="this.textSource"
+                      value=""
+                    >
+                      <option value="own" selected="">Own</option>
+                      <option value="full">Full</option>
+                      <option value="label">Label</option></select
+                    ><label class="flex items-center gap-1"
+                      ><input
+                        type="checkbox"
+                        wf-checked="this.ignoreCase"
+                        value="on"
+                      />Ignore case</label
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1" wf-if="this.attrs.length">
+                <div class="flex items-center gap-2" wf-map="x of this.attrs">
+                  <label
+                    class="flex items-center gap-2 min-w-0 flex-1 font-mono text-xs"
+                    ><input type="checkbox" wf-checked="x.on" value="on" /><span
+                      class="truncate"
+                      >{{x.name}}="{{x.value}}"</span
+                    ></label
+                  ><select
+                    class="outline-none rounded px-1 py-0.5 bg-[#121d2b] text-xs"
+                    wf-value="x.mode"
+                    value=""
+                  >
+                    <option value="exact" selected="">Equals</option>
+                    <option value="contains">Contains</option>
+                    <option value="present">Present</option>
+                  </select>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1">
+                <div class="flex gap-2">
+                  <input
+                    class="flex-1 min-w-0 font-mono outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                    placeholder="Ancestor CSS"
+                    autocapitalize="off"
+                    wf-value="this.withinCss"
+                    value=""
+                  /><input
+                    class="flex-1 min-w-0 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                    placeholder="Ancestor text"
+                    wf-value="this.withinText"
+                    value=""
+                  />
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    class="outline-none font-mono text-xs rounded px-1.5 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
+                    wf-map="x of this.info.ancestors"
+                    wf-onclick="this.withinCss = x.css"
+                    value=""
+                  >
+                    {{x.css}}
+                  </button>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="flex flex-col gap-1 flex-1">
+                  <select
+                    class="HookDialog-matchMode outline-none rounded px-1 py-1 bg-[#121d2b]"
+                    wf-value="this.matchMode"
+                    value=""
+                  >
+                    <option value="single" selected="">One</option>
+                    <option value="nth">Nth</option>
+                    <option value="all">All</option>
+                  </select>
+                  <div
+                    class="flex items-center gap-2"
+                    wf-if="this.matchMode === 'nth'"
+                  >
+                    <input
+                      type="number"
+                      min="0"
+                      class="w-20 outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                      wf-value="this.nth"
+                      value=""
+                    /><span class="text-neutral-400">{{this.nthHint}}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="outline-none self-start rounded px-2 py-0.5 bg-[#121d2b] hover:bg-[#1a2a40] transition-colors"
+                    wf-if="this.result?.status === 'ambiguous' &amp;&amp; this.result.index &gt;= 0"
+                    wf-onclick="this.useNth()"
+                    value=""
+                  >
+                    Use #{{this.result.index}}
+                  </button>
+                </div>
+                <div class="flex flex-col gap-1 flex-1" wf-if="!this.parent">
+                  <select
+                    class="HookDialog-pages outline-none rounded px-1 py-1 bg-[#121d2b]"
+                    wf-value="this.pagesMode"
+                    value=""
+                  >
+                    <option value="path" selected="">This page</option>
+                    <option value="site">Site</option>
+                    <option value="glob">Paths</option></select
+                  ><input
+                    class="w-full font-mono outline-none rounded px-2 py-1 bg-[#2b2d3130] focus:bg-[#2b2d3150]"
+                    placeholder="/products/*"
+                    autocapitalize="off"
+                    wf-if="this.pagesMode === 'glob'"
+                    wf-value="this.pagesValue"
+                    value=""
+                  />
+                </div>
+              </div>
+              <div class="HookDialog-summary" wf-class="{{this.summaryClass}}">
+                {{this.summary}}
+              </div>
+              <div class="flex gap-1.5">
+                <button
+                  value="cancel"
+                  class="flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#121d2b] hover:bg-[#1a2a40]"
+                >
+                  Cancel</button
+                ><button
+                  value="remove"
+                  class="flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#7f1d1d] hover:bg-[#991b1b]"
+                  wf-if="this.props.hook"
+                >
+                  Remove</button
+                ><button
+                  value="ok"
+                  class="HookDialog-ok flex-1 outline-none rounded px-3 py-1 transition-colors bg-[#0071b2] hover:bg-[#008ad9] disabled:hover:bg-[#0071b2] disabled:opacity-50"
+                  wf-disabled="!this.valid"
+                >
+                  OK
                 </button>
               </div>
             </form>

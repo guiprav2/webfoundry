@@ -87,12 +87,15 @@ function normalizePlatformOs(value, legacyMode) {
 // Like el.scrollIntoView(), but only scrolls containers inside this document (ending at this
 // frame's own viewport). scrollIntoView() also scrolls every ancestor window, which yanks the
 // editor and any page embedding it (e.g. the landing page demo).
-function scrollWithinFrame(el, { block = 'nearest', inline = 'nearest' } = {}) {
+// Walks every scroll container between el and the viewport, innermost first, and moves each one
+// only when el isn't fully visible within it (keeping `margin` px clear): centered when el fits,
+// else aligned to its start. overflow: hidden counts, as with scrollIntoView(), since it can clip.
+function scrollWithinFrame(el, { margin = 20 } = {}) {
   let root = document.scrollingElement || document.documentElement;
   let canScroll = (x, axis) => {
     let cs = getComputedStyle(x);
     let overflow = axis === 'y' ? cs.overflowY : cs.overflowX;
-    return /^(auto|scroll|overlay)$/.test(overflow) && (axis === 'y' ? x.scrollHeight > x.clientHeight : x.scrollWidth > x.clientWidth);
+    return /^(auto|scroll|overlay|hidden)$/.test(overflow) && (axis === 'y' ? x.scrollHeight > x.clientHeight : x.scrollWidth > x.clientWidth);
   };
   // body's overflow propagates to the viewport unless <html> sets its own, so it only scrolls itself in that case.
   let bodyIsOwnScroller = getComputedStyle(document.documentElement).overflow !== 'visible';
@@ -102,23 +105,25 @@ function scrollWithinFrame(el, { block = 'nearest', inline = 'nearest' } = {}) {
     if (canScroll(x, 'y') || canScroll(x, 'x')) scrollers.push(x);
   }
   scrollers.push(root);
-  let delta = (start, end, viewStart, viewEnd, mode) => {
-    if (mode === 'center') return (start + end) / 2 - (viewStart + viewEnd) / 2;
-    if (start >= viewStart && end <= viewEnd) return 0;
-    if (start < viewStart || end - start > viewEnd - viewStart) return start - viewStart;
-    return end - viewEnd;
+  let delta = (start, end, viewStart, viewEnd) => {
+    let m = Math.min(margin, Math.max(0, (viewEnd - viewStart - (end - start)) / 2));
+    if (start >= viewStart + m && end <= viewEnd - m) return 0;
+    if (end - start <= viewEnd - viewStart) return (start + end) / 2 - (viewStart + viewEnd) / 2;
+    return start - viewStart;
   };
   for (let sc of scrollers) {
     let r = el.getBoundingClientRect();
     let view;
-    if (sc === root) view = { top: 0, left: 0, bottom: innerHeight, right: innerWidth };
+    if (sc === root) view = { top: 0, left: 0, bottom: root.clientHeight || innerHeight, right: root.clientWidth || innerWidth };
     else {
       let b = sc.getBoundingClientRect();
       let top = b.top + sc.clientTop, left = b.left + sc.clientLeft;
       view = { top, left, bottom: top + sc.clientHeight, right: left + sc.clientWidth };
     }
-    sc.scrollTop += delta(r.top, r.bottom, view.top, view.bottom, block);
-    sc.scrollLeft += delta(r.left, r.right, view.left, view.right, inline);
+    let dy = delta(r.top, r.bottom, view.top, view.bottom);
+    let dx = delta(r.left, r.right, view.left, view.right);
+    if (dy) sc.scrollTop += dy;
+    if (dx) sc.scrollLeft += dx;
   }
 }
 
@@ -133,9 +138,7 @@ addEventListener('message', async ev => {
   if (follow) {
     let scroll = () => {
       let first = state.map.get(rest.cursors[follow]?.at?.(-1));
-      let rect = first?.getBoundingClientRect?.();
-      let visible = rect && rect.top >= 20 && rect.bottom <= innerHeight - 20;
-      !visible && first && scrollWithinFrame(first, { block: rect.height <= innerHeight ? 'center' : 'nearest', inline: rect.width <= innerWidth ? 'center' : 'nearest' });
+      first?.isConnected && scrollWithinFrame(first);
     };
     uid === 'master' ? scroll() : setTimeout(scroll, 500);
   }

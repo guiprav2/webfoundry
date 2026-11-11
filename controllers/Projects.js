@@ -1,7 +1,7 @@
 import rfiles from '../repos/rfiles.js';
 import rprojects from '../repos/rprojects.js';
 import { defaultHtml } from '../other/templates.js';
-import { DECORATION_FILE, esc } from '../other/util.js';
+import { DECORATION_FILE, esc, stripClarity } from '../other/util.js';
 
 export default class Projects {
   state = { list: [] };
@@ -89,7 +89,7 @@ export default class Projects {
           'webfoundry/adwaita-icons.css',
         ].map(async x => {
           let text = await (await fetch(x)).text();
-          if (x === 'index.html') text = text.replace('<title>Webfoundry</title>', `<title>${esc(name)}</title>`);
+          if (x === 'index.html') text = stripClarity(text).replace('<title>Webfoundry</title>', `<title>${esc(name)}</title>`);
           let target = x;
           if (target.endsWith('/wf.config.js')) target = 'wf.config.js';
           if (target.endsWith('/_redirects')) target = '_redirects';

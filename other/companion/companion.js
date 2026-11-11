@@ -50,8 +50,20 @@ if (!fs.existsSync(`${workspace}/.webfoundry`)) {
 }
 
 let s = server(process.env.WF_CLIENT_KEY);
+// Without a listener, eventemitter2 throws on 'error' (bad key, invalid JSON, socket errors) and the process exits.
+s.events.on('error', ({ error }) => console.error(error?.message ?? error));
 s.events.on('connected', () => console.log('Client connected (handshake OK).'));
 s.events.on('disconnected', () => console.log('Client disconnected.'));
+
+// Clients send paths relative to the workspace (`<project>/<file>`). Anything absolute or
+// climbing out with `..` is refused. Checked lexically, so linked projects (top-level symlinks)
+// keep working.
+function inWorkspace(p) {
+  if (typeof p !== 'string' || !p || path.isAbsolute(p) || p.includes('\0')) throw new Error(`Path outside the workspace: ${p}`);
+  let abs = path.resolve(workspace, p);
+  if (!abs.startsWith(workspace + path.sep)) throw new Error(`Path outside the workspace: ${p}`);
+  return p;
+}
 
 let lastOps = new Map();
 function markFileOp(ws, relPath) {
@@ -73,6 +85,7 @@ setInterval(() => {
 // List files under a path, filtering by .gitignore and defaults
 // Note: build matcher per request root so the caller's .gitignore is honored.
 s.rpc('files:list', async ({ path: listRoot }) => {
+  inWorkspace(listRoot);
   // Only honor the .gitignore at the listing root; use it to prune traversal
   let ignoreGlobs = buildGlobIgnoresFromGitignore(listRoot);
   let files = await glob(`${listRoot}/**/*`, { nodir: true, dot: true, ignore: ignoreGlobs });
@@ -82,11 +95,13 @@ s.rpc('files:list', async ({ path: listRoot }) => {
 });
 
 s.rpc('files:stat', async ({ path }) => {
+  inWorkspace(path);
   try { return await fsp.stat(path) }
   catch (err) { if (err.code === 'ENOENT') return null; throw err }
 });
 
 s.rpc('files:load', async ({ path }) => {
+  inWorkspace(path);
   try { return (await fsp.readFile(path)).toString('base64') }
   catch (err) { if (err.code === 'ENOENT') return null; throw err }
 });
@@ -94,6 +109,7 @@ s.rpc('files:load', async ({ path }) => {
 // replace unlinks first (git objects are read-only), and append lets callers send files in chunks
 // that fit the WebSocket payload limit. Chunked callers should only pass mode with the last chunk.
 s.rpc('files:save', async ({ ws, path, data, mode, replace, append }) => {
+  inWorkspace(path);
   await mkdirp(path.split('/').slice(0, -1).join('/'));
   if (replace) await fsp.rm(path, { force: true });
   await fsp[append ? 'appendFile' : 'writeFile'](path, Buffer.from(data, 'base64'));
@@ -101,12 +117,13 @@ s.rpc('files:save', async ({ ws, path, data, mode, replace, append }) => {
   markFileOp(ws, path);
 });
 
-s.rpc('files:mkdir', async ({ path }) => { await mkdirp(path) });
+s.rpc('files:mkdir', async ({ path }) => { await mkdirp(inWorkspace(path)) });
 
 // Lists everything inside the .git entries under root (repositories and submodule gitfiles), which
 // files:list leaves out. Directories are included because git needs refs/ and objects/ even when empty.
 // Symlinks are skipped. A .git under a gitignored directory is skipped along with that directory.
 s.rpc('files:gitEntries', async ({ path: root }) => {
+  inWorkspace(root);
   let ignore = buildGlobIgnoresFromGitignore(root).filter(x => !/\/\.git\/\*\*$/.test(x));
   let localIsIgnored = buildGitignoreMatcher(root);
   let entries = [];
@@ -124,8 +141,8 @@ s.rpc('files:gitEntries', async ({ path: root }) => {
   return entries;
 });
 
-s.rpc('files:mv', async ({ path, newPath }) => await fsp.rename(path, newPath));
-s.rpc('files:rm', async ({ ws, path }) => { await rimraf(path); markFileOp(ws, path) });
+s.rpc('files:mv', async ({ path, newPath }) => await fsp.rename(inWorkspace(path), inWorkspace(newPath)));
+s.rpc('files:rm', async ({ ws, path }) => { await rimraf(inWorkspace(path)); markFileOp(ws, path) });
 // Build an ignore matcher from .gitignore (root only) plus default ignores
 function buildGitignoreMatcher(root) {
   let gitignorePath = path.join(root, '.gitignore');
@@ -271,7 +288,7 @@ let terminals = {};
 s.rpc('shell:spawn', async ({ ws, shell, subdir, cols, rows }) => {
   shell ??= 'bash';
   let cwd = workspace;
-  subdir && (cwd += `/${subdir}`);
+  subdir && (cwd += `/${inWorkspace(subdir)}`);
   await mkdirp(cwd);
   let session = crypto.randomUUID();
   let term = pty.spawn(shell, [], { name: 'xterm-color', cols, rows, cwd, env: { WF_SESSION: session, ...process.env } });
@@ -335,7 +352,7 @@ s.rpc('shell:kill', ({ session }) => {
 
 s.events.on('message:shell', ({ session, payload }) => {
   let term = terminals[session];
-  if (!term) throw new Error(`Unknown terminal session: ${session}`);
+  if (!term) return console.error(`Unknown terminal session: ${session}`);
   term.write(Buffer.from(payload, 'base64').toString('utf-8'));
 });
 

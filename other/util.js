@@ -73,6 +73,12 @@ export function debounce(func, delay) {
   };
 }
 
+// Webfoundry's own analytics tag lives in the site's root index.html, which doubles as the
+// project template. It must never reach a user's project, preview or export.
+export function stripClarity(html) {
+  return String(html).replace(/[ \t]*<script\b[^>]*>(?:(?!<\/script>)[\s\S])*<\/script>[ \t]*\n?/gi, x => x.includes('clarity.ms') ? '' : x);
+}
+
 export function esc(str) { return str == null ? '' : String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') }
 
 export let joinPath = window.joinPath = (path, name) => [...(path?.split?.('/') || []), name].filter(Boolean).join('/');

@@ -2,8 +2,30 @@ import * as WebSocket from 'ws';
 import EventEmitter from 'eventemitter2';
 import crypto from 'crypto';
 
+let EXTRA_ORIGINS = (process.env.WF_ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);
+
+// Webfoundry's own origins: local dev servers, webfoundry.app and its Netlify sites. No Origin
+// means a non-browser client such as the wf CLI.
+export function allowedOrigin(origin) {
+  if (!origin) return true;
+  if (EXTRA_ORIGINS.includes(origin)) return true;
+  let url;
+  try { url = new URL(origin) } catch { return false }
+  if (!/^https?:$/.test(url.protocol)) return false;
+  let host = url.hostname;
+  // Not *.localhost or other *.webfoundry.app subdomains: those serve isolated user projects.
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+    || host === 'webfoundry.app' || host === 'www.webfoundry.app'
+    || /^([a-z0-9-]+--)?webfoundry\d*\.netlify\.app$/.test(host);
+}
+
 export default function server(key, opt = {}) {
   if (!key) throw new Error(`Missing key`);
+  let keyBuf = Buffer.from(String(key));
+  let keyMatches = given => {
+    let buf = Buffer.from(String(given ?? ''));
+    return buf.length === keyBuf.length && crypto.timingSafeEqual(buf, keyBuf);
+  };
   opt.port ??= 8845;
 
   let rpc = {};
@@ -67,7 +89,17 @@ export default function server(key, opt = {}) {
     return await awaitWFResult(id, command?.params?.page || command?.name === 'createProject' ? 40000 : 10000); // Pages and new projects may take a while to load.
   });
 
-  let wss = new WebSocket.WebSocketServer({ port: opt.port });
+  // Loopback only, and only browser pages from Webfoundry's own origins (the CLI sends no Origin).
+  // The key is still the real gate: every message besides the handshake needs it first.
+  let wss = new WebSocket.WebSocketServer({
+    port: opt.port,
+    host: opt.host ?? process.env.WF_COMPANION_HOST ?? '127.0.0.1',
+    verifyClient: ({ origin }) => {
+      if (allowedOrigin(origin)) return true;
+      console.error(`Refused connection from origin ${origin}`);
+      return false;
+    },
+  });
   ret.send = (ws, data) => ws.send(JSON.stringify(data)),
 
   wss.on('connection', (ws) => {
@@ -92,7 +124,7 @@ export default function server(key, opt = {}) {
         return ws.send(JSON.stringify({ type: 'error', error: 'Received invalid JSON' }));
       }
       if (data.type === 'handshake') {
-        if (data.key === key) {
+        if (keyMatches(data.key)) {
           ret.clients.add(ws);
           socketMeta.set(ws, { kind: 'unknown', projectId: null });
           ws.send(JSON.stringify({ type: 'handshake', status: 'ok' }));
@@ -104,8 +136,13 @@ export default function server(key, opt = {}) {
         }
         return;
       }
+      if (!ret.clients.has(ws)) {
+        ws.send(JSON.stringify({ type: 'error', error: 'Handshake required' }));
+        return ws.close(1008, 'Handshake required');
+      }
       let { type } = data;
       delete data.type;
+      if (typeof type !== 'string') return ws.send(JSON.stringify({ type: 'error', error: 'Missing message type' }));
       if (type === 'identify') {
         console.log('identify:', data);
         socketMeta.set(ws, { kind: data.kind || 'unknown', projectId: data.projectId ?? null, instanceId: data.instanceId, collab: data.collab, origin: data.origin });
@@ -131,7 +168,9 @@ export default function server(key, opt = {}) {
           error ? pending.reject(new Error(error)) : pending.resolve(result);
         }
       } else {
-        ret.events.emit(`message:${type}`, { ws: null, ...data, ws });
+        // A throwing listener mustn't take the whole Companion down.
+        try { ret.events.emit(`message:${type}`, { ws: null, ...data, ws }) }
+        catch (err) { console.error(err); ws.send(JSON.stringify({ type: 'error', error: err.toString() })) }
       }
     });
   });

@@ -1,4 +1,4 @@
-import EventEmitter from 'https://esm.run/eventemitter2';
+import EventEmitter from 'https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/+esm';
 
 export default class Event {
   state = {

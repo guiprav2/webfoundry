@@ -1,14 +1,16 @@
-import * as pako from 'https://esm.run/pako';
-import LightningFS from 'https://esm.run/@isomorphic-git/lightning-fs';
-import git from 'https://esm.run/isomorphic-git';
-import gitHttp from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js';
+import * as pako from 'https://cdn.jsdelivr.net/npm/pako@3.0.3/+esm';
+import LightningFS from 'https://cdn.jsdelivr.net/npm/@isomorphic-git/lightning-fs@4.10.5/+esm';
+import git from 'https://cdn.jsdelivr.net/npm/isomorphic-git@1.44.12/+esm';
+import gitHttp from 'https://unpkg.com/isomorphic-git@1.0.0-beta.36/http/web/index.js';
 import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
+import { rebasePageUrls } from '../other/page-move.js';
+import { checkWebfoundryFile } from '../other/page-check.js';
 import rprojects from '../repos/rprojects.js';
 import structuredFiles from '../other/structuredFiles.js';
-import { DECORATION_FILE, debounce, isDecorationPath, joinPath, loadman, stripClarity } from '../other/util.js';
+import { DECORATION_FILE, debounce, isDecorationPath, isolationLabel, joinPath, loadman, stripClarity } from '../other/util.js';
 import { defaultCtrl, defaultHtml } from '../other/templates.js';
-import { lookup as mimeLookup } from 'https://esm.run/mrmime';
+import { lookup as mimeLookup } from 'https://cdn.jsdelivr.net/npm/mrmime@2.0.1/+esm';
 import { deriveProjectNameFromUrl, gitCorsProxy } from '../other/gitImport.js';
 import { downloadBlob, exportAndroidApk, exportLinuxAppImage } from '../nasty/export-native.js';
 
@@ -84,7 +86,7 @@ export default class Files {
           let domain = parts.slice(1).join('.');
           let project = parts[0];
           if (!/^webfoundry.app|webfoundry\d+\.netlify\.app|localhost$/.test(domain)) return;
-          if (state.projects.current?.replaceAll?.(':', '-') !== project) return; // FIXME: Also check path.
+          if (!state.projects.current || isolationLabel(state.projects.current) !== project) return; // FIXME: Also check path.
         }
         if (type === 'fetch') {
           if (!ev.source || typeof ev.source.postMessage !== 'function') return;
@@ -249,6 +251,8 @@ export default class Files {
         return await loadman.run('files.create', async () => {
           await rfiles.save(project, fullpath, blob);
           bus.emit('files:create:ready', { project, path: fullpath, select });
+          // Peers have no files:create:ready listener (the host owns the tree), so open it here.
+          if (select && state.collab.uid !== 'master') await post('collab.open', fullpath);
           return { success: true, note: select ? `File created and selected (opened)` : `File created` };
         });
       } else {
@@ -273,7 +277,8 @@ export default class Files {
       let tail = path.split('/').at(path.endsWith('/') ? -2 : -1) + (path.endsWith('/') ? '/' : '');
       let newPath = dest === '/' ? tail : dest.slice(0, dest.lastIndexOf('/') + 1) + tail;
       if (newPath.startsWith(path)) return;
-      await rfiles.mv(state.projects.current, path, newPath);
+      await rfiles.mv(project, path, newPath);
+      await rebaseMovedPages(project, path, newPath, path.endsWith('/'));
       state.event.bus.emit('files:mv:ready', { project, path, newPath });
     },
 
@@ -294,6 +299,7 @@ export default class Files {
       newPath ??= [...path.split('/').slice(0, isDir ? -2 : -1), newName].join('/') + (isDir ? '/' : '');
       return await loadman.run('files.mv', async () => {
         await rfiles.mv(project, path, newPath);
+        await rebaseMovedPages(project, path, newPath, isDir);
         bus.emit('files:mv:ready', { project, path, newPath });
         return { success: true, note: `File moved and selected (opened)` };
       });
@@ -316,13 +322,18 @@ export default class Files {
       let { bus } = state.event;
       let project = state.projects.current;
       bus.emit('files:reflect:start', { project });
-      let files = await rfiles.list(project);
+      // Sorted, so this and `wf reflect` (other/reflect.js) write the same JSON for the same files.
+      let files = (await rfiles.list(project)).sort();
       let templates = {};
       for (let x of files.filter(x => x.endsWith('.html'))) templates[x] = await (await rfiles.load(project, x)).text();
       await rfiles.save(project, 'webfoundry/templates.json', new Blob([JSON.stringify(templates)], { type: 'application/json' }));
       let scripts = files.filter(x => x.endsWith('.js'));
       await rfiles.save(project, 'webfoundry/scripts.json', new Blob([JSON.stringify(scripts)], { type: 'application/json' }));
-      bus.emit('files:reflect:ready', { project, templates, scripts });
+      // Pages are also edited outside the IDE now; flag ones that lost Webfoundry's structure.
+      let problems = Object.fromEntries(Object.entries(templates).map(([path, html]) => [path, checkWebfoundryFile(path, html)]).filter(x => x[1].length));
+      this.state.pageProblems = problems;
+      for (let [path, list] of Object.entries(problems)) console.warn(`${path} isn't a well-formed Webfoundry file:\n- ${list.join('\n- ')}`);
+      bus.emit('files:reflect:ready', { project, templates, scripts, problems });
     }, 200),
 
     push: async () => await loadman.run('files.push', async () => {
@@ -375,114 +386,19 @@ export default class Files {
       }
       deployMode = deployMode || 'production';
       showModal('LoadingDialog', { msg: 'Compressing files...' });
-      const blob = await rfiles.exportZip(project);
+      let blob = await rfiles.exportZip(project);
       document.querySelector('dialog')?.remove?.();
-      const headers = { Authorization: `Bearer ${key}` };
       if (type === 'new') {
-        const res = await fetch('https://api.netlify.com/api/v1/sites', {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: x }),
-        });
-        if (!res.ok) {
-          await showModal('NetlifyPostDeployDialog', { success: false });
-          return;
-        }
-        const json = await res.json();
-        siteId = json.id;
+        try { siteId = (await netlifyCreateSite(key, x)).id }
+        catch (err) { await showModal('NetlifyPostDeployDialog', { success: false, error: err.message }); return }
       } else if (type === 'existing') {
         siteId = x;
       }
       localStorage.setItem(`webfoundry:netlifySiteId:${project}`, siteId);
       localStorage.setItem('webfoundry:netlifyDeployMode', deployMode);
-      const uploadStart = Date.now();
-      let uploadDeployId = null;
-      let expectedContext = deployMode === 'preview' ? 'deploy-preview' : 'production';
       showModal('LoadingDialog', { msg: 'Deploying to Netlify...' });
-      let uploadFailed = false;
       try {
-        let uploadUrl = `https://api.netlify.com/api/v1/sites/${siteId}/deploys`;
-        if (deployMode === 'preview') uploadUrl += '?draft=true';
-        const res = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/zip' },
-          body: blob,
-        });
-        if (!res.ok) {
-          uploadFailed = true;
-          throw new Error(`Netlify deploy upload failed (${res.status})`);
-        }
-        try {
-          let payload = await res.json();
-          uploadDeployId = payload?.deploy_id || uploadDeployId;
-          if (payload?.context) expectedContext = payload.context;
-        } catch (_) {
-          /* ignore parse failures; we'll fall back to listing */
-        }
-      } catch (err) {
-        if (!err.message.includes('CORS')) console.error(err);
-        if (uploadFailed) {
-          document.querySelector('dialog')?.remove?.();
-          await showModal('NetlifyPostDeployDialog', { success: false, error: err.message });
-          return;
-        }
-      }
-      const recentEnough = createdAt => {
-        if (!createdAt) return true;
-        let created = new Date(createdAt).getTime();
-        if (Number.isNaN(created)) return true;
-        return created + 180000 >= uploadStart;
-      };
-      const matchesContext = deploy => {
-        if (!deploy) return false;
-        if (!expectedContext) return true;
-        if (deploy.context) return deploy.context === expectedContext;
-        if (expectedContext === 'deploy-preview') return deploy.published === false;
-        if (expectedContext === 'production') return deploy.published !== false;
-        return true;
-      };
-      const checkDeployStatus = async (timeout = 300000, interval = 3000) => {
-        const start = Date.now();
-        let warnedDetailFetch = false;
-        while (Date.now() - start < timeout) {
-          let deploy = null;
-          if (uploadDeployId) {
-            try {
-              const detailRes = await fetch(`https://api.netlify.com/api/v1/sites/${siteId}/deploys/${uploadDeployId}`, { headers });
-              if (detailRes.ok) deploy = await detailRes.json();
-              if (deploy && deploy.context) expectedContext = deploy.context;
-            } catch (err) {
-              if (!warnedDetailFetch) console.warn('Failed to load Netlify deploy detail:', err);
-              warnedDetailFetch = true;
-            }
-          }
-          if (!deploy) {
-            const res = await fetch(`https://api.netlify.com/api/v1/sites/${siteId}/deploys?per_page=10`, { headers });
-            if (res.ok) {
-              let deploys = await res.json();
-              deploys.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-              deploy = deploys.find(item => matchesContext(item) && recentEnough(item?.created_at));
-            }
-          }
-          if (deploy && !uploadDeployId && deploy.created_at) {
-            let createdTime = new Date(deploy.created_at).getTime();
-            if (!Number.isNaN(createdTime) && createdTime + 60000 < uploadStart) deploy = null;
-          }
-          if (deploy) {
-            if (deploy.state === 'error') {
-              let message = deploy.error_message || deploy.error_message_body || 'Deploy failed';
-              let err = new Error(message);
-              err.deploy = deploy;
-              throw err;
-            }
-            if (deploy.state === 'ready') return deploy;
-          }
-          await new Promise(resolve => setTimeout(resolve, interval));
-        }
-        throw new Error('Deploy status check timed out');
-      };
-      try {
-        let deploy = await checkDeployStatus();
+        let deploy = await netlifyUpload({ key, siteId, blob, mode: deployMode });
         document.querySelector('dialog')?.remove?.();
         let pagePath = this.state.current?.startsWith?.('pages/') ? this.state.current.slice('pages/'.length) : '';
         if (pagePath.endsWith('/index.html')) pagePath = pagePath.slice(0, -'/index.html'.length);
@@ -504,6 +420,48 @@ export default class Files {
         document.querySelector('dialog')?.remove?.();
         await showModal('NetlifyPostDeployDialog', { success: false, error: err.message });
       }
+    },
+
+    // wf deploy: no dialogs. site / newSite pick or create the site; otherwise the project's linked one.
+    deployHeadless: async ({ site, newSite, preview = false } = {}) => {
+      let project = state.projects.current;
+      let key = localStorage.getItem('webfoundry:netlifyApiKey');
+      if (!key) return { success: false, error: `No Netlify API key in this browser. Ask the user to deploy once from the editor's Deploy button, which stores the key.` };
+      let mode = preview ? 'preview' : 'production';
+      return await loadman.run('files.deploy', async () => {
+        try {
+          let siteId = localStorage.getItem(`webfoundry:netlifySiteId:${project}`);
+          let created = false;
+          if (newSite) { siteId = (await netlifyCreateSite(key, newSite)).id; created = true }
+          else if (site) siteId = (await netlifyFindSite(key, site)).id;
+          if (!siteId) return { success: false, error: `This project isn't linked to a Netlify site yet. Pass --new <name> to create one or --site <name-or-id> to use an existing one.` };
+          let blob = await rfiles.exportZip(project);
+          let deploy = await netlifyUpload({ key, siteId, blob, mode });
+          localStorage.setItem(`webfoundry:netlifySiteId:${project}`, siteId);
+          let url = mode === 'production'
+            ? deploy.ssl_url || deploy.url
+            : deploy.deploy_ssl_url || deploy.deploy_url || deploy.review_url;
+          return { success: true, mode, created, siteId, siteName: deploy.name, deployId: deploy.id, url };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      });
+    },
+
+    // wf deploy-info: whether a key is stored and which site the project deploys to.
+    deployInfo: async () => {
+      let project = state.projects.current;
+      let key = localStorage.getItem('webfoundry:netlifyApiKey');
+      let siteId = localStorage.getItem(`webfoundry:netlifySiteId:${project}`);
+      let info = { success: true, keySet: !!key, siteId: siteId || null };
+      if (!key || !siteId) return info;
+      try {
+        let site = await netlifyFindSite(key, siteId);
+        Object.assign(info, { siteName: site.name, url: site.ssl_url || site.url, publishedDeployId: site.published_deploy?.id || null, publishedAt: site.published_deploy?.published_at || null });
+      } catch (err) {
+        info.error = err.message;
+      }
+      return info;
     },
 
     importZip: async () => {
@@ -546,11 +504,13 @@ export default class Files {
     handleGitImportQuery: async () => {
       if (state.collab.uid !== 'master') return;
       if (this.state.gitImportQueryHandled) return;
-      let query = consumeGitImportParam();
+      // zip= takes a same-origin archive (the landing demos, see other/build-demos.js); git= clones through the CORS proxy.
+      let zipQuery = consumeGitImportParam('zip');
+      let query = zipQuery || consumeGitImportParam();
       if (!query) return;
       this.state.gitImportQueryHandled = true;
       let { repoUrl: presetUrl, projectName: presetName } = parseGitImportParam(query);
-      let derivedName = presetName?.trim() || deriveProjectNameFromUrl(presetUrl) || '';
+      let derivedName = presetName?.trim() || (zipQuery ? deriveProjectNameFromZipUrl : deriveProjectNameFromUrl)(presetUrl) || '';
       if (state.app.demo && derivedName) {
         let existing = state.projects.list.find(x => x.startsWith(`${derivedName}:`));
         if (existing) {
@@ -576,10 +536,11 @@ export default class Files {
         }
         if (!project) project = state.projects.list.find(x => x.startsWith(`${projectName}:`));
         try {
-          await runGitImportFlow(project, repoUrl, branch);
+          if (zipQuery) await runZipImportFlow(project, repoUrl);
+          else await runGitImportFlow(project, repoUrl, branch);
         } catch (err) {
           console.error(err);
-          await showModal('InfoDialog', { title: `Git import failed: ${err.message}` });
+          await showModal('InfoDialog', { title: `${zipQuery ? 'ZIP' : 'Git'} import failed: ${err.message}` });
         }
       } finally {
         this.state.importing--;
@@ -615,13 +576,33 @@ export default class Files {
         return;
       }
       let name = project.split(':')[0];
-      showModal('LoadingDialog', { msg: 'Exporting native app' });
+      // Components get a copy of props, so pass msg as a binding to update it live.
+      let loading = { msg: 'Exporting native app...' };
+      showModal('LoadingDialog', { msg: d.binding({ get: () => loading.msg }) });
+      let progress = {};
+      let phaseStart = Date.now();
+      let render = () => {
+        let msg = nativeExportProgressMsg(target, progress);
+        // Steps without their own progress (e.g. font downloads) show elapsed time instead.
+        let secs = Math.floor((Date.now() - phaseStart) / 1000);
+        if (secs >= 3 && progress.phase !== 'download' && progress.phase !== 'pack') msg += ` (${secs}s)`;
+        if (msg === loading.msg) return;
+        loading.msg = msg;
+        d.update();
+      };
+      let onProgress = p => {
+        if (p.phase !== progress.phase) phaseStart = Date.now();
+        progress = p;
+        render();
+      };
+      let ticker = setInterval(render, 1000);
       try {
         let blob;
         let filename;
         if (target === 'android-arm64') {
           blob = await exportAndroidApk(project, {
             name,
+            onProgress,
             orientation: windowOpts.orientation,
             documentClassNames: windowOpts.documentClassNames,
             theme: windowOpts.theme ?? (windowOpts.systemTheme ? 'system' : 'none'),
@@ -630,6 +611,7 @@ export default class Files {
         } else {
           blob = await exportLinuxAppImage(project, {
             name,
+            onProgress,
             width: windowOpts.width,
             height: windowOpts.height,
             startMaximized: windowOpts.startMaximized,
@@ -642,16 +624,52 @@ export default class Files {
           });
           filename = `${name}-x86_64.AppImage`;
         }
+        clearInterval(ticker);
         document.querySelector('dialog')?.remove?.();
         downloadBlob(blob, filename);
       } catch (err) {
         console.error(err);
+        clearInterval(ticker);
         document.querySelector('dialog')?.remove?.();
         await showModal('InfoDialog', { title: `Native export failed: ${err.message}` });
       }
     },
   };
 };
+
+function nativeExportProgressMsg(target, { phase, loaded, total, percent }) {
+  let mb = n => (n / 1048576).toFixed(0);
+  let runtime = target === 'android-arm64' ? 'Android' : 'Linux';
+  switch (phase) {
+    case 'files': return 'Collecting project files...';
+    case 'fonts': return 'Bundling fonts...';
+    case 'compress': return 'Compressing project...';
+    case 'download':
+      if (!total) return `Downloading ${runtime} runtime... ${mb(loaded)} MB`;
+      return `Downloading ${runtime} runtime... ${Math.floor((loaded / total) * 100)}% (${mb(loaded)} / ${mb(total)} MB)`;
+    case 'build': return target === 'android-arm64' ? 'Adding project to APK...' : 'Building AppImage...';
+    case 'pack': return `Compressing APK... ${Math.floor(percent ?? 0)}%`;
+    case 'sign': return 'Signing APK...';
+    default: return 'Exporting native app...';
+  }
+}
+
+// Moving pages across folders shifts what their relative static srcs point at (see other/page-move.js).
+async function rebaseMovedPages(project, path, newPath, isDir) {
+  let moves = isDir
+    ? (await rfiles.list(project)).filter(x => x.startsWith(newPath)).map(x => [path + x.slice(newPath.length), x])
+    : [[path, newPath]];
+  // A folder move takes the files it holds along, so references into it follow too.
+  let mapTarget = isDir ? t => (t.startsWith(path) ? newPath + t.slice(path.length) : t) : undefined;
+  for (let [from, to] of moves) {
+    if (!to.endsWith('.html') || !from.startsWith('pages/') || !to.startsWith('pages/')) continue;
+    let blob = await rfiles.load(project, to);
+    if (!blob) continue;
+    let html = await blob.text();
+    let next = rebasePageUrls(html, from, to, mapTarget);
+    if (next !== html) await rfiles.save(project, to, new Blob([next], { type: 'text/html' }));
+  }
+}
 
 async function promptGitImportDialog(props = {}) {
   let [btn, detail] = await showModal('GitImportDialog', props);
@@ -713,10 +731,28 @@ async function persistGitFiles(project, pfs, currentDir, prefix) {
 }
 
 async function runGitImportFlow(project, repoUrl, branch) {
-  showModal('LoadingDialog', { msg: `Importing ${branch}...` });
+  await runImportFlow(project, `Importing ${branch}...`, () => importGitRepository(project, repoUrl, branch));
+}
+
+// No .git for these: the archives are snapshots, and the project can still be pushed to a new repo later.
+async function runZipImportFlow(project, zipUrl) {
+  await runImportFlow(project, 'Importing project...', async () => {
+    let url = new URL(zipUrl, location.href);
+    if (url.origin !== location.origin) throw new Error('Only archives from this site can be imported by URL.');
+    let res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
+    await rfiles.importZip(project, await res.blob());
+    // Same analytics-tag cleanup git imports get in persistGitFiles.
+    let index = await rfiles.load(project, 'index.html');
+    if (index) await rfiles.save(project, 'index.html', new Blob([stripClarity(await index.text())], { type: 'text/html' }));
+  });
+}
+
+async function runImportFlow(project, msg, importFn) {
+  showModal('LoadingDialog', { msg });
   state.files.importing++;
   try {
-    await importGitRepository(project, repoUrl, branch);
+    await importFn();
     if (state.projects.current === project) {
       // Close whatever was open (it may be stale now), then open pages/index.html once the refreshed list is in.
       await post('files.select', null);
@@ -731,11 +767,21 @@ async function runGitImportFlow(project, repoUrl, branch) {
   }
 }
 
-function consumeGitImportParam() {
+function deriveProjectNameFromZipUrl(zipUrl) {
+  try {
+    let last = new URL(zipUrl, location.href).pathname.split('/').filter(Boolean).pop() || '';
+    return decodeURIComponent(last.replace(/\.zip$/i, ''));
+  } catch (err) {
+    return '';
+  }
+}
+
+function consumeGitImportParam(key = 'git') {
   try {
     let current = new URL(location.href);
-    let value = current.searchParams.get('git');
-    current.searchParams.delete('git');
+    let value = current.searchParams.get(key);
+    if (value == null) return null;
+    current.searchParams.delete(key);
     history.replaceState(null, '', `${current.pathname}${current.search}${current.hash}`);
     return value;
   } catch (err) {
@@ -766,4 +812,83 @@ function unb64(base64, type = '') {
   let nums = new Array(chars.length);
   for (let i = 0; i < chars.length; i++) nums[i] = chars.charCodeAt(i);
   return new Blob([new Uint8Array(nums)], { type });
+}
+
+// Netlify deploys, shared by the Deploy dialog and the wf deploy command. The API key never
+// leaves this browser: agents reach these through the IDE, which reads it from localStorage.
+let NETLIFY_API = 'https://api.netlify.com/api/v1';
+
+async function netlifyCreateSite(key, name) {
+  let res = await fetch(`${NETLIFY_API}/sites`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.errors?.subdomain?.join?.(', ') || '' } catch {}
+    throw new Error(`Couldn't create Netlify site "${name}" (${res.status}${detail ? `: ${detail}` : ''})`);
+  }
+  return await res.json();
+}
+
+// Accepts a site ID, a site name (foo) or its domain (foo.netlify.app, or a custom domain).
+async function netlifyFindSite(key, site) {
+  let headers = { Authorization: `Bearer ${key}` };
+  let tries = [site];
+  if (!site.includes('.') && !/^[0-9a-f-]{36}$/.test(site)) tries.push(`${site}.netlify.app`);
+  for (let x of tries) {
+    let res = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(x)}`, { headers });
+    if (res.ok) return await res.json();
+    if (res.status === 401) throw new Error('The stored Netlify API key was rejected.');
+  }
+  throw new Error(`Netlify site not found: ${site}`);
+}
+
+// Uploads a project ZIP and waits until Netlify reports the deploy ready (mode: production | preview).
+async function netlifyUpload({ key, siteId, blob, mode = 'production', timeout = 300000 }) {
+  let headers = { Authorization: `Bearer ${key}` };
+  let uploadStart = Date.now();
+  let deployId = null;
+  let expectedContext = mode === 'preview' ? 'deploy-preview' : 'production';
+  try {
+    let url = `${NETLIFY_API}/sites/${siteId}/deploys${mode === 'preview' ? '?draft=true' : ''}`;
+    let res = await fetch(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/zip' }, body: blob });
+    if (!res.ok) throw Object.assign(new Error(`Netlify deploy upload failed (${res.status})`), { upload: true });
+    try {
+      let payload = await res.json();
+      deployId = payload?.id || payload?.deploy_id || null;
+      if (payload?.context) expectedContext = payload.context;
+    } catch {} // Unreadable response: find the deploy by listing below.
+  } catch (err) {
+    if (err.upload) throw err;
+    // A network/CORS failure reading the response can still mean the upload went through.
+    if (!err.message.includes('CORS')) console.error(err);
+  }
+  let recentEnough = createdAt => {
+    let created = new Date(createdAt).getTime();
+    return !createdAt || Number.isNaN(created) || created + 60000 >= uploadStart;
+  };
+  let matchesContext = deploy => {
+    if (deploy.context) return deploy.context === expectedContext;
+    return expectedContext === 'deploy-preview' ? deploy.published === false : deploy.published !== false;
+  };
+  let start = Date.now();
+  while (Date.now() - start < timeout) {
+    let deploy = null;
+    if (deployId) {
+      let res = await fetch(`${NETLIFY_API}/sites/${siteId}/deploys/${deployId}`, { headers }).catch(() => null);
+      if (res?.ok) deploy = await res.json();
+    } else {
+      let res = await fetch(`${NETLIFY_API}/sites/${siteId}/deploys?per_page=10`, { headers }).catch(() => null);
+      if (res?.ok) {
+        let deploys = (await res.json()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        deploy = deploys.find(x => matchesContext(x) && recentEnough(x.created_at)) || null;
+      }
+    }
+    if (deploy?.state === 'error') throw Object.assign(new Error(deploy.error_message || 'Deploy failed'), { deploy });
+    if (deploy?.state === 'ready') return deploy;
+    await new Promise(pres => setTimeout(pres, 3000));
+  }
+  throw new Error('Deploy status check timed out');
 }

@@ -1,4 +1,4 @@
-import { lookup as mimeLookup } from 'https://esm.run/mrmime';
+import { lookup as mimeLookup } from 'https://cdn.jsdelivr.net/npm/mrmime@2.0.1/+esm';
 
 window.tap = x => (console.log(x), x);
 
@@ -7,6 +7,19 @@ export let resolve = x => (typeof x === 'function' ? x() : x);
 // Decoration projects (see controllers/Decoration.js) keep their hooks in this file.
 export let DECORATION_FILE = 'site.decoration.json';
 export let isDecorationPath = path => path === DECORATION_FILE;
+
+// Subdomain label of a project's isolated frame origin ('name:uuid' -> 'name-uuid').
+// Labels that fit DNS's 63 characters stay as they always were (their origins hold preview app data);
+// longer ones get the name part truncated.
+export function isolationLabel(project) {
+  let clean = x => x.toLowerCase().replace(/[^a-z0-9:-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  let [name, uuid] = String(project).split(':');
+  let label = clean(`${name}-${uuid}`);
+  if (label.length <= 63) return label;
+  uuid = clean(uuid);
+  name = clean(name).slice(0, Math.max(0, 62 - uuid.length)).replace(/-+$/, '');
+  return name ? `${name}-${uuid}` : uuid;
+}
 
 export function normalizeOrigin(value) {
   let text = String(value ?? '').trim();

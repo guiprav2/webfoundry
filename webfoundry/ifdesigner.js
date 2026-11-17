@@ -1,8 +1,8 @@
 import BiMap from './bimap.js';
-import Boo from 'https://esm.run/@camilaprav/boo@1.0.6';
+import Boo from 'https://cdn.jsdelivr.net/npm/@camilaprav/boo@1.0.6/+esm';
 import d from './dominant.js';
-import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
-import morphdom from 'https://esm.run/morphdom';
+import htmlsnap from 'https://cdn.jsdelivr.net/npm/@camilaprav/htmlsnap@0.0.16/+esm';
+import morphdom from 'https://cdn.jsdelivr.net/npm/morphdom@2.7.8/+esm';
 
 // Injected by the Firefox extension into another site (Decoration projects): no page globals,
 // and traffic goes through the extension instead of parent.postMessage.
@@ -15,7 +15,17 @@ if (decorating && !crypto.randomUUID) {
   crypto.randomUUID = () => '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16));
 }
 let wforigin = decorating ? decoratingFor : new URL(location.href).searchParams.get('isolate') || location.origin;
-if (/^(\w+\.)?(webfoundry.app|webfoundry\d+\.netlify\.app|localhost)$/.test(wforigin)) throw new Error(`Bad isolation origin`);
+// ?isolate= names the editor trusted with eval and state, so any site framing a project origin could
+// claim it. Only accept the editor this origin hangs off: same scheme, its parent domain or a sibling
+// that isn't another project's frame (those labels end in a uuid; see isolationLabel in other/util.js).
+if (!decorating && new URL(location.href).searchParams.get('isolate') != null && !(() => {
+  let u;
+  try { u = new URL(wforigin) } catch { return false }
+  let root = location.host.split('.').slice(1).join('.');
+  if (u.origin !== wforigin || u.protocol !== location.protocol || !root) return false;
+  if (u.host === root) return true;
+  return u.host.endsWith(`.${root}`) && !/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(u.hostname.split('.')[0]);
+})()) throw new Error(`Bad isolation origin`);
 let post = decorating
   ? data => window.postMessage({ wfDecorate: 'up', json: JSON.stringify(data) }, location.origin)
   : data => parent.postMessage({ path: null, ...data, path: location.pathname.slice(1).split('/').slice(3).join('/') }, wforigin);
@@ -89,29 +99,33 @@ function normalizePlatformOs(value, legacyMode) {
 // editor and any page embedding it (e.g. the landing page demo).
 // Walks every scroll container between el and the viewport, innermost first, and moves each one
 // only when el isn't fully visible within it (keeping `margin` px clear): centered when el fits,
-// else aligned to its start. overflow: hidden counts, as with scrollIntoView(), since it can clip.
+// else aligned to its start. Only axes the user can scroll move: overflow: hidden (or clip) clips
+// without a scrollbar, so the page's own layout decides what shows there, not the editor.
 function scrollWithinFrame(el, { margin = 20 } = {}) {
   let root = document.scrollingElement || document.documentElement;
-  let canScroll = (x, axis) => {
-    let cs = getComputedStyle(x);
-    let overflow = axis === 'y' ? cs.overflowY : cs.overflowX;
-    return /^(auto|scroll|overlay|hidden)$/.test(overflow) && (axis === 'y' ? x.scrollHeight > x.clientHeight : x.scrollWidth > x.clientWidth);
-  };
+  let scrollable = overflow => /^(auto|scroll|overlay)$/.test(overflow);
   // body's overflow propagates to the viewport unless <html> sets its own, so it only scrolls itself in that case.
-  let bodyIsOwnScroller = getComputedStyle(document.documentElement).overflow !== 'visible';
+  let html = getComputedStyle(document.documentElement);
+  let bodyIsOwnScroller = html.overflow !== 'visible';
+  let viewportStyle = bodyIsOwnScroller ? html : getComputedStyle(document.body);
   let scrollers = [];
   for (let x = el.parentElement; x && x !== root; x = x.parentElement) {
     if (x === document.body && !bodyIsOwnScroller) continue;
-    if (canScroll(x, 'y') || canScroll(x, 'x')) scrollers.push(x);
+    let cs = getComputedStyle(x);
+    let y = scrollable(cs.overflowY) && x.scrollHeight > x.clientHeight;
+    let xAxis = scrollable(cs.overflowX) && x.scrollWidth > x.clientWidth;
+    if (y || xAxis) scrollers.push({ sc: x, y, x: xAxis });
   }
-  scrollers.push(root);
+  // The viewport scrolls unless its overflow is hidden or clipped (visible behaves as auto there).
+  let viewportAxis = overflow => overflow !== 'hidden' && overflow !== 'clip';
+  scrollers.push({ sc: root, y: viewportAxis(viewportStyle.overflowY), x: viewportAxis(viewportStyle.overflowX) });
   let delta = (start, end, viewStart, viewEnd) => {
     let m = Math.min(margin, Math.max(0, (viewEnd - viewStart - (end - start)) / 2));
     if (start >= viewStart + m && end <= viewEnd - m) return 0;
     if (end - start <= viewEnd - viewStart) return (start + end) / 2 - (viewStart + viewEnd) / 2;
     return start - viewStart;
   };
-  for (let sc of scrollers) {
+  for (let { sc, x, y } of scrollers) {
     let r = el.getBoundingClientRect();
     let view;
     if (sc === root) view = { top: 0, left: 0, bottom: root.clientHeight || innerHeight, right: root.clientWidth || innerWidth };
@@ -122,23 +136,34 @@ function scrollWithinFrame(el, { margin = 20 } = {}) {
     }
     let dy = delta(r.top, r.bottom, view.top, view.bottom);
     let dx = delta(r.left, r.right, view.left, view.right);
-    if (dy) sc.scrollTop += dy;
-    if (dx) sc.scrollLeft += dx;
+    if (dy && y) sc.scrollTop += dy;
+    if (dx && x) sc.scrollLeft += dx;
   }
 }
 
+let handledFollowToken = null;
 addEventListener('message', async ev => {
   let { type, ...rest } = ev.data;
   if (type !== 'state' || ev.origin !== wforigin) return;
-  let uid = state.collab?.uid;
+  // The first message after a (re)load is also what sets state.collab.
+  let uid = rest.collab?.uid ?? state.collab?.uid;
   let changed = k => rest.cursors?.[k]?.length && JSON.stringify(state.cursors[k]) !== JSON.stringify(rest.cursors[k]);
   // Follow our own selection; while we have none, follow whichever agent just changed its selection.
+  // followCursor: the IDE just brought this page up for an agent; scroll to it once per document.
+  let hint = rest.followCursor;
+  let hinted = hint?.token && hint.token !== handledFollowToken && hint.cur;
+  delete rest.followCursor;
   let follow = uid && (JSON.stringify(state.cursors[uid]) !== JSON.stringify(rest.cursors?.[uid]) ? uid
-    : !rest.cursors?.[uid]?.length && Object.keys(rest.cursors || {}).filter(k => /(^|\/)agent:/.test(k) && changed(k)).at(-1));
+    : rest.followAgents && !rest.cursors?.[uid]?.length && (hinted || Object.keys(rest.cursors || {}).filter(k => /(^|\/)agent:/.test(k) && changed(k)).at(-1)));
   if (follow) {
-    let scroll = () => {
+    // A page the IDE just brought up may not be mapped or laid out yet (its iframe is still being
+    // shown), and scrolling a hidden frame does nothing, so retry for a few seconds.
+    let scroll = (tries = 40) => {
       let first = state.map.get(rest.cursors[follow]?.at?.(-1));
-      first?.isConnected && scrollWithinFrame(first);
+      let laidOut = first?.isConnected && innerHeight > 0 && first.getClientRects().length;
+      if (!laidOut) return tries > 0 && setTimeout(() => scroll(tries - 1), 100);
+      scrollWithinFrame(first);
+      if (follow === hinted) handledFollowToken = hint.token;
     };
     uid === 'master' ? scroll() : setTimeout(scroll, 500);
   }

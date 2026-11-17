@@ -21,6 +21,13 @@ revealTimer = setTimeout(reveal, 15000);
 // Pages under pages/ served at the site root set rootPrefix to '/', which wf.config.js
 // would turn into a protocol-relative //wf.uiconfig.json URL.
 if (window.rootPrefix === '/') window.rootPrefix = '';
+// The project's base URL, which every runtime lookup derives from: /files|preview/<tab>/<project>/
+// in the IDE's frames, / for a published site, ./ where the document sits at the base (the root
+// index.html shell, Nasty). Pages can sit at any depth under pages/, so never assume one ../.
+window.wfProjectUrl ??= path => {
+  let p = window.rootPrefix ?? location.pathname.match(/^\/(?:files|preview)\/[^/]+\/[^/]+/)?.[0] ?? '';
+  return `${p === '.' ? '.' : p.replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
+};
 (async () => {
   {
     let script = document.createElement('script');
@@ -102,7 +109,6 @@ if (window.rootPrefix === '/') window.rootPrefix = '';
   }
   let cfg = (await import('../wf.config.js')).default;
   let promises = [];
-  let prefix = /^\/(files|pages)\//.test(location.pathname) ? '../' : '';
   if (cfg.nerdfonts) {
     let link = document.createElement('link');
     link.className = 'wf-nf-link';
@@ -159,13 +165,22 @@ if (window.rootPrefix === '/') window.rootPrefix = '';
       if (!name || themeLoads.has(name) || document.querySelector(`style.wf-${name}`)) return themeLoads.get(name);
       let load = (async () => {
         try {
-          let res = await fetch(`${prefix}webfoundry/${name}.tw.css`);
+          let res = await fetch(wfProjectUrl(`webfoundry/${name}.tw.css`));
           if (!res.ok || document.querySelector(`style.wf-${name}`)) return;
           let style = document.createElement('style');
           style.type = 'text/tailwindcss';
           style.className = `wf-${name}`;
           style.textContent = await res.text();
           document.head.append(style);
+          // Material sets text in Inter, which native exports bundle from Google Fonts; load the
+          // same weights here so the preview matches the export instead of falling back.
+          if (name === 'material' && !document.querySelector('link.wf-material-fonts')) {
+            let link = document.createElement('link');
+            link.className = 'wf-material-fonts';
+            link.rel = 'stylesheet';
+            link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap';
+            document.head.append(link);
+          }
         } catch (err) {
           console.warn(`${name} utilities unavailable:`, err);
         }
@@ -207,7 +222,7 @@ if (window.rootPrefix === '/') window.rootPrefix = '';
       let link = document.createElement('link');
       link.className = 'wf-adwaita-icons';
       link.rel = 'stylesheet';
-      link.href = `${prefix}webfoundry/adwaita-icons.css`;
+      link.href = wfProjectUrl('webfoundry/adwaita-icons.css');
       document.head.append(link);
     };
     let usesIcons = el => iconRe.test(el.className?.baseVal ?? el.className ?? '') || !!el.querySelector?.('[class*="adw-icon-"]');
@@ -224,7 +239,7 @@ if (window.rootPrefix === '/') window.rootPrefix = '';
 
     let script = document.createElement('script');
     script.className = 'wf-tw-script';
-    script.src = `${prefix}webfoundry/tailplay4.dafuq.js`;
+    script.src = wfProjectUrl('webfoundry/tailplay4.dafuq.js');
     let pscript = Promise.withResolvers();
     script.onload = () => pscript.resolve('tw');
     script.onerror = err => pscript.reject(err);

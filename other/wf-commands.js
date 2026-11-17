@@ -8,6 +8,8 @@ function agentCursor(cur) {
 // defaultCur is the cursor used without --cur. The CLI passes one per agent; the in-browser shell keeps master.
 export function parseWfInvocation(argv, { defaultCur = 'master' } = {}) {
   let verbose = false;
+  // -v works before the subcommand too, as the usage line shows.
+  while (argv[0] === '-v' || argv[0] === '--verbose') { verbose = true; argv = argv.slice(1); }
   let [subcmd, ...rest0] = argv;
   let rest = [...rest0];
   while (rest.length && /^--?\w+$/.test(rest[0])) {
@@ -373,6 +375,50 @@ let subcommands = {
     format: (result, io, argv) => {
       if (!result?.success) return die(result, io, argv);
       io.log(`Platform OS: ${result.os || 'web'}`);
+    },
+  },
+  reflect: {
+    description: 'Regenerate webfoundry/templates.json and scripts.json from the project files on disk (after editing HTML outside the IDE), and report pages that lost Webfoundry structure. Runs locally; no IDE needed.',
+    local: true,
+    build: ({ positionals }) => {
+      if (positionals.length) throw new Error('wf reflect takes no arguments.');
+      return { name: 'reflect' };
+    },
+    format: (result, io) => {
+      io.log(`Reflected ${result.templates} HTML files and ${result.scripts} scripts.`);
+      let entries = Object.entries(result.problems || {});
+      if (!entries.length) return;
+      io.error(`${entries.length} file${entries.length === 1 ? ' needs' : 's need'} fixing:`);
+      for (let [path, list] of entries) {
+        io.error(`  ${path}`);
+        for (let x of list) io.error(`    - ${x}`);
+      }
+      io.code = 1;
+    },
+  },
+  deploy: {
+    description: "Deploy the project to Netlify with the key stored in the IDE: [--site <name|domain|id> | --new <name>] [--preview].",
+    build: ({ flags, positionals }) => {
+      if (positionals.length) throw new Error('wf deploy takes no positional arguments; use --site or --new.');
+      let site = flags.site, newSite = flags.new;
+      if (site === 'true' || newSite === 'true') throw new Error('--site and --new need a value.');
+      if (site && newSite) throw new Error('Pass either --site or --new, not both.');
+      return { name: 'deploy', params: { site, newSite, preview: !!flags.preview } };
+    },
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`${result.mode === 'preview' ? 'Draft deployed' : 'Deployed'}${result.created ? ' to new site' : ''} ${result.siteName || result.siteId}: ${result.url}`);
+    },
+  },
+  'deploy-info': {
+    description: 'Show whether a Netlify key is stored in the IDE and which site the project deploys to.',
+    build: () => ({ name: 'deployInfo' }),
+    format: (result, io, argv) => {
+      if (!result?.success) return die(result, io, argv);
+      io.log(`Netlify key: ${result.keySet ? 'stored' : 'not set (the user must deploy once from the editor)'}`);
+      io.log(`Site: ${result.siteId ? `${result.siteName || result.siteId}${result.url ? ` (${result.url})` : ''}` : 'not linked yet (use wf deploy --new <name> or --site <name>)'}`);
+      if (result.publishedAt) io.log(`Last published: ${result.publishedAt}`);
+      if (result.error) io.log(`Warning: ${result.error}`);
     },
   },
   'get-project-title': titleGetter('Print the project title.', 'getProjectTitle'),

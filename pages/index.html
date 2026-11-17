@@ -8,12 +8,20 @@
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
     <script>
+      // rootPrefix is the project's base URL, so the runtime loads from pages at any depth.
       window.rootPrefix = /^\/(files|preview)\//.test(location.pathname)
         ? location.pathname.split('/').slice(0, 4).join('/')
         : '/';
+      for (let [src, module] of [
+        ['webfoundry/ifdesigner.js', true],
+        ['webfoundry/head.js', false],
+      ]) {
+        let s = document.createElement('script');
+        s.src = rootPrefix.replace(/\/$/, '') + '/' + src;
+        module ? (s.type = 'module') : (s.async = false);
+        document.head.append(s);
+      }
     </script>
-    <script type="module" src="../webfoundry/ifdesigner.js"></script>
-    <script src="../webfoundry/head.js"></script>
   </head>
   <body
     class="flex flex-col [&amp;&gt;div:first-child]:flex-1 min-h-screen"
@@ -473,7 +481,7 @@
                   02 / One IDE, two ways to start
                 </div>
                 <h2
-                  class="mt-5 tracking-[-.075em] font-extrabold leading-[1.03] text-[clamp(2.8rem,4vw,5.4rem)]"
+                  class="mt-5 tracking-[-.075em] font-extrabold leading-[1.03] text-[clamp(2.8rem,3.5vw,5.4rem)]"
                 >
                   Build a site.<br />Then
                   <span
@@ -800,197 +808,6 @@
         </section>
 
         <!-- Agentic interaction section -->
-        <section
-          class="py-24 sm:py-28 bg-[#eae6dc] border-y border-[#16171d]/5"
-          id="agents"
-        >
-          <div
-            class="max-w-[1280px] mx-auto px-5 md:px-9 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center"
-          >
-            <div>
-              <div
-                class="text-[11px] font-mono font-bold text-[#7054ed] tracking-widest uppercase"
-              >
-                03 / Multimodal by nature
-              </div>
-              <h2
-                class="mt-5 text-[clamp(2.8rem,4.7vw,5.1rem)] font-extrabold tracking-[-.075em] leading-[1.05]"
-              >
-                Talk it through.<br /><span class="text-[#7054ed]"
-                  >Take the wheel.</span
-                >
-              </h2>
-              <p
-                class="mt-7 text-[#635f69] text-base sm:text-lg leading-relaxed max-w-[510px]"
-              >
-                Agents are collaborators, not replacements for the editor. Ask
-                by voice or text to activate a tool, then adjust with the mouse
-                or keyboard. Or skip the agent and edit directly—your choice.
-              </p>
-              <div class="mt-9 flex flex-col gap-5">
-                <div class="flex gap-4 items-start">
-                  <span
-                    class="size-9 shrink-0 rounded-xl bg-white flex items-center justify-center text-[#7054ed] font-mono font-bold text-xs"
-                    >01</span
-                  >
-                  <div>
-                    <h3 class="font-bold text-[15px]">
-                      Voice and text, one conversation
-                    </h3>
-                    <p class="text-sm text-[#76717a] mt-1">
-                      Switch inputs without restarting a task.
-                    </p>
-                  </div>
-                </div>
-                <div class="flex gap-4 items-start">
-                  <span
-                    class="size-9 shrink-0 rounded-xl bg-white flex items-center justify-center text-[#7054ed] font-mono font-bold text-xs"
-                    >02</span
-                  >
-                  <div>
-                    <h3 class="font-bold text-[15px]">Precise, modal tools</h3>
-                    <p class="text-sm text-[#76717a] mt-1">
-                      Adjust padding, alignment, and sizing with your mouse and
-                      keyboard.
-                    </p>
-                  </div>
-                </div>
-                <div class="flex gap-4 items-start">
-                  <span
-                    class="size-9 shrink-0 rounded-xl bg-white flex items-center justify-center text-[#7054ed] font-mono font-bold text-xs"
-                    >03</span
-                  >
-                  <div>
-                    <h3 class="font-bold text-[15px]">
-                      Agents edit through the same tools
-                    </h3>
-                    <p class="text-sm text-[#76717a] mt-1">
-                      HTML edits go through Webfoundry's structured tools, with
-                      validation, transactions, and undo built in.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="relative">
-              <div
-                class="absolute -top-5 -left-5 size-32 rounded-full bg-[#d9ff7a]/80 blur-2xl"
-                aria-hidden="true"
-              ></div>
-              <div
-                class="bg-[#171823] rounded-[30px] border border-black/10 shadow-[0_30px_85px_-35px_rgba(35,27,79,.30)] p-4 sm:p-6 relative overflow-hidden"
-              >
-                <div
-                  class="flex items-center justify-between border-b border-white/10 pb-5"
-                >
-                  <span
-                    class="flex items-center gap-2 text-white/60 font-mono text-[10px] tracking-widest"
-                    ><span class="size-2 rounded-full bg-[#83e89c]"></span> LIVE
-                    EDIT SESSION</span
-                  ><span class="text-white/30 text-[10px] font-mono"
-                    >Shift · constrain axis</span
-                  >
-                </div>
-                <div
-                  class="p-3 sm:p-6 pt-9 sm:pt-10 relative min-h-[245px] flex items-center justify-center"
-                >
-                  <div
-                    class="relative w-full max-w-[360px] rounded-xl bg-white p-9 sm:p-11 shadow-[0_18px_45px_rgba(0,0,0,.25)] border-[3px] border-dashed border-[#b7a8fb]"
-                  >
-                    <div class="rounded-xl bg-[#ddd4ff] p-5 text-center">
-                      <div
-                        class="rounded-md bg-[#7054ed] text-white font-bold py-5 text-[17px]"
-                      >
-                        Your component ✳
-                      </div>
-                    </div>
-                    <span
-                      class="absolute -top-3 left-6 rounded-md bg-[#7054ed] text-white font-bold text-[10px] py-1 px-2"
-                      >padding</span
-                    >
-                    <div
-                      class="absolute -right-7 top-[48%] rounded-lg bg-[#d9ff7a] border border-[#a9c266] px-3 py-2 text-[#24341a] font-mono text-xs font-bold shadow-lg"
-                    >
-                      24px ↔
-                    </div>
-                    <svg
-                      class="absolute bottom-[-23px] left-[68%] size-11 text-white drop-shadow-[0_2px_2px_rgba(0,0,0,.5)]"
-                      viewBox="0 0 40 40"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M5 3v29l9-9 6 13 6-3-6-13 13-1L5 3Z"
-                        stroke="#171823"
-                        stroke-width="2"
-                      ></path>
-                    </svg>
-                  </div>
-                </div>
-                <div class="mt-2 bg-white/10 rounded-2xl p-4">
-                  <div class="flex gap-3 items-start">
-                    <span
-                      class="size-8 rounded-full bg-[#7054ed] text-white flex items-center justify-center shrink-0"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                        class="size-4"
-                        aria-hidden="true"
-                      >
-                        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
-                        <path
-                          d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"
-                        ></path></svg
-                    ></span>
-                    <div class="flex-1">
-                      <p
-                        class="text-white/45 text-[10px] font-mono uppercase tracking-wider"
-                      >
-                        You said
-                      </p>
-                      <p class="text-white font-semibold text-sm mt-1">
-                        “I want to adjust this element's padding.”
-                      </p>
-                    </div>
-                  </div>
-                  <div class="my-3 border-t border-white/10"></div>
-                  <div class="flex gap-3 items-start">
-                    <span
-                      class="size-8 rounded-full bg-[#d9ff7a] text-[#16171d] flex items-center justify-center shrink-0 font-bold"
-                      >✳</span
-                    >
-                    <div>
-                      <p
-                        class="text-white/45 text-[10px] font-mono uppercase tracking-wider"
-                      >
-                        Webfoundry
-                      </p>
-                      <p class="text-white/85 text-sm mt-1">
-                        Padding tool active. Move your mouse to adjust. Say
-                        “left only” to constrain.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  class="mt-4 flex flex-wrap gap-2 text-[10px] text-white/55 font-mono"
-                >
-                  <span class="px-3 py-2 rounded-full border border-white/15"
-                    >↔ horizontal</span
-                  ><span class="px-3 py-2 rounded-full border border-white/15"
-                    >↕ vertical</span
-                  ><span class="px-3 py-2 rounded-full border border-white/15"
-                    >ESC cancel</span
-                  ><span class="px-3 py-2 rounded-full border border-white/15"
-                    >↵ commit</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         <!-- P2P collaboration -->
         <section
@@ -1148,6 +965,25 @@
                   class="rounded-[24px] bg-[#222330] border border-white/10 p-6 flex gap-4 items-start"
                 >
                   <span
+                    class="size-10 rounded-xl shrink-0 bg-[#d9ff7a]/10 text-[#d9ff7a] flex items-center justify-center text-xl"
+                    >◎</span
+                  >
+                  <div>
+                    <h3 class="font-bold text-[17px] tracking-tight">
+                      Invite with a link
+                    </h3>
+                    <p class="mt-2 text-sm text-white/50 leading-relaxed">
+                      Guests join from a link, with no account or install. The
+                      project stays on the host's machine: guests open its
+                      pages, manage its files and even follow its read-only
+                      terminal through the host.
+                    </p>
+                  </div>
+                </div>
+                <div
+                  class="rounded-[24px] bg-[#222330] border border-white/10 p-6 flex gap-4 items-start"
+                >
+                  <span
                     class="size-10 rounded-xl shrink-0 bg-[#c8bbff]/15 text-[#c8bbff] flex items-center justify-center text-xl"
                     >↗</span
                   >
@@ -1157,25 +993,8 @@
                     </h3>
                     <p class="mt-2 text-sm text-white/50 leading-relaxed">
                       Live collaboration in the visual editor and code editor,
-                      with changes flowing between peers.
-                    </p>
-                  </div>
-                </div>
-                <div
-                  class="rounded-[24px] bg-[#222330] border border-white/10 p-6 flex gap-4 items-start"
-                >
-                  <span
-                    class="size-10 rounded-xl shrink-0 bg-[#d9ff7a]/10 text-[#d9ff7a] flex items-center justify-center text-xl"
-                    >◎</span
-                  >
-                  <div>
-                    <h3 class="font-bold text-[17px] tracking-tight">
-                      Independent presence
-                    </h3>
-                    <p class="mt-2 text-sm text-white/50 leading-relaxed">
-                      Separate cursors and selections let people and their
-                      agents work side by side without stealing each other's
-                      focus.
+                      with changes flowing between peers. No servers involved
+                      besides initial WebRTC signaling.
                     </p>
                   </div>
                 </div>
@@ -1192,7 +1011,7 @@
                     </h3>
                     <p class="mt-2 text-sm text-white/50 leading-relaxed">
                       Validated HTML transactions and undo make structural
-                      changes inspectable, reversible, and safe to iterate on.
+                      changes reversible and safe to iterate on.
                     </p>
                   </div>
                 </div>
@@ -1211,7 +1030,7 @@
         <section id="inside" class="pt-24 sm:pt-32 pb-8">
           <div class="max-w-[1280px] mx-auto px-5 md:px-9">
             <div class="grid lg:grid-cols-2 gap-14 items-center">
-              <div class="order-2 lg:order-1">
+              <div class="order-2 lg:order-1 min-w-0">
                 <div
                   class="rounded-[30px] bg-[#e3ddf7] border border-[#d3c9ea] p-6 sm:p-9 overflow-hidden relative"
                 >
@@ -1242,7 +1061,7 @@
                       <div>
                         <span class="text-[#8b8b9d]">02</span> &nbsp; &nbsp;
                         <span class="text-[#ad97ff]">&lt;h2&gt;</span>Hey,
-                        <span class="text-[#d9ff7a]">\{{state.app.user}}</span
+                        <span class="text-[#d9ff7a]">{{state.app.user}}</span
                         >!<span class="text-[#ad97ff]">&lt;/h2&gt;</span>
                       </div>
                       <div>
@@ -1256,7 +1075,7 @@
                       <div>
                         <span class="text-[#8b8b9d]">04</span> &nbsp; &nbsp;
                         &nbsp; <span class="text-[#ad97ff]">&lt;span&gt;</span
-                        ><span class="text-[#d9ff7a]">\{{item.title}}</span
+                        ><span class="text-[#d9ff7a]">{{item.title}}</span
                         ><span class="text-[#ad97ff]">&lt;/span&gt;</span>
                       </div>
                       <div>
@@ -1292,7 +1111,7 @@
                   </div>
                 </div>
               </div>
-              <div class="order-1 lg:order-2">
+              <div class="order-1 lg:order-2 min-w-0">
                 <div
                   class="text-[11px] font-mono font-bold text-[#7054ed] tracking-widest uppercase"
                 >
@@ -1325,8 +1144,8 @@
                   <div class="border-t border-[#16171d]/15 pt-4">
                     <h3 class="font-bold">Agent-readable structure</h3>
                     <p class="mt-1 text-[#7c7780] leading-relaxed">
-                      Structured HTML operations preserve visual editing,
-                      validation, and undo.
+                      Structured HTML operations preserve visual editing and
+                      validation.
                     </p>
                   </div>
                   <div class="border-t border-[#16171d]/15 pt-4">
@@ -1380,7 +1199,7 @@
                     Webfoundry projects with
                     <a
                       target="_blank"
-                      href="https://github.com/guiprav2/nasty"
+                      href="https://nasty-engine.netlify.app/"
                       class="font-bold text-[#16171d]"
                       >Nasty ↗</a
                     >, our JavaScript-first native renderer. Native windows,
@@ -1389,7 +1208,7 @@
                   <div class="mt-7 flex flex-wrap gap-2">
                     <span
                       class="inline-flex items-center gap-2 px-4 py-2 bg-white/65 rounded-full text-[11px] font-bold text-[#364b23]"
-                      >◈ Windows</span
+                      >◈ Windows (coming soon)</span
                     ><span
                       class="inline-flex items-center gap-2 px-4 py-2 bg-white/65 rounded-full text-[11px] font-bold text-[#364b23]"
                       >◈ Linux</span
@@ -1537,12 +1356,12 @@
                 applications, here are real projects you can explore.
               </p>
             </div>
-            <div class="grid md:grid-cols-2 gap-5">
+            <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               <article
                 class="rounded-[24px] bg-white border border-[#16171d]/10 overflow-hidden group"
               >
                 <div
-                  class="h-[200px] bg-[#ddd5ff] p-6 relative overflow-hidden"
+                  class="bg-[#ddd5ff] p-6 relative overflow-hidden h-[240px]"
                 >
                   <div
                     class="absolute right-[-18px] top-8 w-[75%] h-[180px] bg-white rounded-xl shadow-xl border border-[#7054ed]/20 rotate-[7deg] p-4"
@@ -1592,48 +1411,101 @@
                 class="rounded-[24px] bg-white border border-[#16171d]/10 overflow-hidden group"
               >
                 <div
-                  class="h-[200px] bg-[#d8e7f2] p-6 relative overflow-hidden"
+                  class="bg-[#16171d] relative overflow-hidden flex items-center justify-center h-[240px] px-4 pb-4 pt-11"
                 >
-                  <div
-                    class="absolute left-6 top-9 w-[92%] h-[160px] bg-[#151a25] rounded-xl shadow-xl rotate-[4deg] p-4"
-                  >
-                    <div class="flex gap-2 mb-5">
-                      <span class="h-2 w-2 bg-[#f5c09b] rounded-full"></span
-                      ><span class="h-2 w-2 bg-[#a0beec] rounded-full"></span
-                      ><span class="h-2 w-2 bg-[#a3ebae] rounded-full"></span>
-                    </div>
-                    <div class="flex gap-3 items-end h-[70px]">
-                      <div class="bg-[#748ad0] rounded-t w-1/5 h-[50%]"></div>
-                      <div class="bg-[#95d8d3] rounded-t w-1/5 h-[78%]"></div>
-                      <div class="bg-[#d6e6a0] rounded-t w-1/5 h-[90%]"></div>
-                      <div class="bg-[#c0a4ef] rounded-t w-1/5 h-[62%]"></div>
-                      <div class="bg-[#ec9c9e] rounded-t w-1/5 h-full"></div>
-                    </div>
-                  </div>
+                  <img
+                    src="../media/vitrola-player.webp"
+                    alt="Vitrola, a video player built with Nasty"
+                    class="block max-h-full max-w-full rounded-lg shadow-xl border border-white/10"
+                  />
                   <span
-                    class="absolute top-5 right-5 font-mono font-bold text-[10px] text-[#406480] tracking-widest"
-                    >NATIVE RENDERING</span
+                    class="absolute top-5 left-6 font-mono font-bold text-[10px] text-[#ff8a93] tracking-widest"
+                    >BUILT WITH NASTY</span
                   >
                 </div>
                 <div class="p-6">
                   <div
                     class="flex items-center gap-2 text-[10px] text-[#7054ed] font-mono mb-3"
                   >
-                    02 / NASTY APPS
+                    02 / NATIVE VIDEO PLAYER
                   </div>
                   <h3 class="text-2xl font-extrabold tracking-tight">
-                    Treva · Vitrola · Rainbow
+                    Vitrola
                   </h3>
                   <p
                     class="text-sm text-[#77717c] mt-3 leading-relaxed min-h-[65px]"
                   >
-                    A gallery, a media player, and a live process visualizer
-                    built on a native JS renderer.
+                    A video jukebox with playlists, a 3D cover carousel and a
+                    Grok assistant, running natively on Nasty.
                   </p>
+                  <div class="mt-5 flex flex-wrap gap-2">
+                    <a
+                      href="https://github.com/guiprav2/nasty/releases/download/demos/Vitrola-x86_64.AppImage"
+                      class="inline-flex items-center px-3 py-1.5 rounded-full bg-[#16171d] hover:bg-[#7054ed] text-white text-[11px] font-bold transition-colors"
+                      >↧ Linux AppImage</a
+                    ><a
+                      href="https://github.com/guiprav2/nasty/releases/download/demos/Vitrola-arm64.apk"
+                      class="inline-flex items-center px-3 py-1.5 rounded-full bg-[#16171d] hover:bg-[#7054ed] text-white text-[11px] font-bold transition-colors"
+                      >↧ Android APK</a
+                    ><span
+                      class="inline-flex items-center px-3 py-1.5 rounded-full border border-dashed border-[#16171d]/20 text-[11px] font-bold text-[#8b858d]"
+                      >Windows soon</span
+                    >
+                  </div>
                   <a
-                    href="#native"
-                    class="mt-5 inline-block text-[#7054ed] text-xs font-bold group-hover:underline"
-                    >See native capabilities ↗</a
+                    href="https://nasty-engine.netlify.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-4 inline-block text-[#7054ed] text-xs font-bold group-hover:underline"
+                    >More on Nasty ↗</a
+                  >
+                </div>
+              </article>
+              <article
+                class="rounded-[24px] bg-white border border-[#16171d]/10 overflow-hidden group"
+              >
+                <div
+                  class="bg-[#16171d] relative overflow-hidden flex items-center justify-center h-[240px] px-4 pb-4 pt-11"
+                >
+                  <img
+                    src="../media/treva-gallery.webp"
+                    alt="Treva, an image viewer built with Nasty"
+                    class="block max-h-full max-w-full rounded-lg shadow-xl border border-white/10"
+                  />
+                  <span
+                    class="absolute top-5 left-6 font-mono font-bold text-[10px] text-[#ff8a93] tracking-widest"
+                    >BUILT WITH NASTY</span
+                  >
+                </div>
+                <div class="p-6">
+                  <div
+                    class="flex items-center gap-2 text-[10px] text-[#7054ed] font-mono mb-3"
+                  >
+                    03 / NATIVE IMAGE VIEWER
+                  </div>
+                  <h3 class="text-2xl font-extrabold tracking-tight">Treva</h3>
+                  <p
+                    class="text-sm text-[#77717c] mt-3 leading-relaxed min-h-[65px]"
+                  >
+                    Point it at a folder and browse every image inside in a
+                    GPU-rendered gallery and full-size viewer.
+                  </p>
+                  <div class="mt-5 flex flex-wrap gap-2">
+                    <a
+                      href="https://github.com/guiprav2/nasty/releases/download/demos/Treva-x86_64.AppImage"
+                      class="inline-flex items-center px-3 py-1.5 rounded-full bg-[#16171d] hover:bg-[#7054ed] text-white text-[11px] font-bold transition-colors"
+                      >↧ Linux AppImage</a
+                    ><span
+                      class="inline-flex items-center px-3 py-1.5 rounded-full border border-dashed border-[#16171d]/20 text-[11px] font-bold text-[#8b858d]"
+                      >Windows soon</span
+                    >
+                  </div>
+                  <a
+                    href="https://nasty-engine.netlify.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-4 inline-block text-[#7054ed] text-xs font-bold group-hover:underline"
+                    >More on Nasty ↗</a
                   >
                 </div>
               </article>
@@ -1716,7 +1588,8 @@
                   Yes. Bring your coding agent. It can work with ordinary
                   JavaScript files and use Webfoundry's HTML tools for
                   structural edits. Those operations are validated,
-                  transactional, undoable, and remain editable on the canvas.
+                  transactional, and remain editable on the canvas. Webfoundry's
+                  built-in agent uses your own OpenAI or xAI API key.
                 </p>
               </details>
               <details
@@ -1770,6 +1643,26 @@
                   No. The live demos on this page launch right into the editor.
                   Explore the source, change an element, or play with a
                   controller before signing up for anything.
+                </p>
+              </details>
+              <details
+                id="privacy"
+                class="group bg-white border border-[#16171d]/10 rounded-2xl p-5 sm:p-6 scroll-mt-24"
+              >
+                <summary
+                  class="font-bold cursor-pointer list-none flex items-center justify-between gap-4"
+                >
+                  What does this site collect?<span
+                    class="text-[#7054ed] text-xl group-open:rotate-45 transition-transform"
+                    >+</span
+                  >
+                </summary>
+                <p class="text-[#716c76] mt-4 text-sm leading-relaxed">
+                  This site uses Microsoft Clarity for anonymous usage
+                  analytics. Your projects stay in your browser, or on your own
+                  disk when you use the Webfoundry Companion, unless you choose
+                  to share or publish them. API keys you enter stay in your
+                  browser and are sent only to the AI provider they belong to.
                 </p>
               </details>
             </div>
@@ -1869,7 +1762,8 @@
                 <div class="flex flex-col gap-3 text-[#66616a]">
                   <a class="hover:text-[#7054ed]" href="#native">Native apps</a
                   ><a class="hover:text-[#7054ed]" href="#showcase">Showcase</a
-                  ><a class="hover:text-[#7054ed]" href="#faq">FAQ</a>
+                  ><a class="hover:text-[#7054ed]" href="#faq">FAQ</a
+                  ><a class="hover:text-[#7054ed]" href="#privacy">Privacy</a>
                 </div>
               </div>
               <div>
@@ -1891,6 +1785,12 @@
                     target="_blank"
                     rel="noopener noreferrer"
                     >Dominant ↗</a
+                  ><a
+                    class="hover:text-[#7054ed]"
+                    href="https://github.com/guiprav2/nasty"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Nasty ↗</a
                   ><a
                     class="hover:text-[#7054ed]"
                     href="https://github.com/guiprav2/kittygpt"

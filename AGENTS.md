@@ -6,7 +6,7 @@ This guide explains how **projects inside Webfoundry** are structured and how to
 
 ## 📌 General Guidelines
 
-* MOST IMPORTANT (DO NOT IGNORE): Never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.) Always use `wf read-html` and the other DOM manipulation commands documented below to modify markup safely.
+* MOST IMPORTANT (DO NOT IGNORE): While the project is open in Webfoundry (check with `wf instances`), never edit `.html` files with text-based tools (echo with redirect, python with read/write commands, apply\_patch, etc.); the IDE holds the page and would overwrite or fight your edit. Use `wf read-html` and the other DOM manipulation commands documented below. When no Webfoundry tab has the project open, you may edit HTML files directly, then run `wf reflect` (see **Editing HTML without Webfoundry**).
 * Don't run `wf select-file` before reading or editing HTML: it switches the page the user is looking at and can disrupt their work. Pass `--page pages/x.html` to `wf read-html` and the edit commands instead. Only use `wf select-file` to bring the user's attention to something, or when explicitly asked to.
 * No need for `wf select-file` before manipulating non-HTML files
 * This file documents everything you need. `webfoundry/*.js` in a project is the generated runtime, so don't read it to learn how things work. To list the theme classes that exist, `grep '@utility adw-' webfoundry/adwaita.tw.css` (likewise `and-` in `material.tw.css`, `win-` in `fluent.tw.css`).
@@ -106,7 +106,9 @@ Webfoundry templates support **declarative bindings**:
 <div wf-innerhtml="state.app.html"></div>
 ```
 
+* These, with `wf-class`, `wf-if`, `wf-map`, `wf-on*`, `wf-component` and `wf-props` below, are all the `wf-*` attributes there are. There's no `wf-style`, `wf-show` or `wf-text`: use `wf-class`, `wf-if` and `{{...}}`.
 * `wf-value` and `wf-checked` write back with `expr = newValue`, so their expression must be assignable.
+* `wf-src` values are project paths such as `'media/logo.png'`, resolved from the project root on any page. A static `src` is relative to the page's own directory: `../media/logo.png` from `pages/`, `../../media/logo.png` from `pages/blog/`.
 
 ### Dynamic Classes (`wf-class`)
 
@@ -166,7 +168,7 @@ Webfoundry templates support **declarative bindings**:
 * Pages under `pages/` are loaded and routed automatically by Webfoundry’s App class.
 * HTML gets compiled into reactive DOM; `post()` and two-way bindings trigger updates (see Controllers → Rendering).
 * Don't re-render by hand beyond `d.update()`; mutate state or call actions instead.
-* Routing: `/` is `pages/index.html` and `/foo/bar.html` is `pages/foo/bar.html`. Unknown paths render `pages/404.html`, if present. `triggerRouterError(code)` renders `pages/<code>.html`.
+* Routing: `/` is `pages/index.html` and `/foo/bar.html` is `pages/foo/bar.html`. Clean URLs work too: `/foo/bar` is `pages/foo/bar.html` and `/foo/` is `pages/foo/index.html`. Unknown paths render `pages/404.html`, if present. `triggerRouterError(code)` renders `pages/<code>.html`.
 * Links: relative `<a href>` values navigate without a reload, relative to the current page's directory, so write `about.html`, not `../pages/about.html`. `#id` scrolls to that element. Hrefs with a scheme (`https:`, `mailto:`) and `download` links keep native behavior. Programmatic navigation is `history.pushState(null, '', url)`. Pass parameters in the query string (`wf-href="'details.html?id=' + t.id"`) and read them with `new URLSearchParams(location.search)`, usually from the `wf-onattach` of the destination page's root.
 * The page root (the `div` right under `body`) already fills the viewport: `body` is a full-height flex column and the root is its `flex-1` child. Don't add `min-h-screen` or `h-screen` to the root; it pins the root to one viewport, and a `sticky` header inside it stops sticking after that.
 * The page `<title>` comes from each page's `<head>`. `wf` can't select `<head>` elements even though `wf read-html` shows IDs for them, so set titles with `wf set-page-title "About"` (a blank page title uses the project title, set with `wf set-project-title`). Pages created by `wf create-file` start with `<body style="display: none">`, which the runtime reveals once styles are ready; keep it, along with the generated `<head>` scripts.
@@ -437,6 +439,8 @@ Use bare event names (`click`, not `onclick`). Quote the pairs, because parenthe
 * `wf open-project <name>` / `wf create-project <name>` – open or create a project. Work on it from its folder under the workspace.
 * `wf open [--url <url>]` – open a new Webfoundry instance in the default browser and print its id.
 * `wf list-editors` – list open visual editors: path, flags (`active`, `shadow`, `loading`, `preview`), cursors.
+* `wf deploy-info` – whether a Netlify API key is stored in the IDE and which Netlify site the project deploys to.
+* `wf deploy [--new <name> | --site <name|domain|id>] [--preview]` – deploy the project to Netlify and print its URL. The first deploy needs `--new` (creates `<name>.netlify.app`) or `--site` (an existing site); later deploys reuse that site. `--preview` makes a draft deploy with its own URL and leaves the live site alone. It uses the API key the user stored in the IDE, which you never see: if none is stored, ask the user to deploy once from the editor's Deploy button. Deploy only when the user asks, and prefer `--preview` unless they asked to publish. It can take a few minutes. Collab peers can't deploy.
 
 These flags work on any subcommand:
 
@@ -452,7 +456,19 @@ Flag aliases: `--ids` (change-selection), `--classes` (add/remove-css-classes), 
 
 ### Testing a page
 
-`wf set-page-preview preview` runs the page live in the IDE, but `wf` can't click or type in it. To test interactions, serve the project folder as static files with every unknown path falling back to `/index.html` (that's what `_redirects` declares; e.g. `npx serve -s .`) and drive it with a headless browser such as Playwright. Pages render from `webfoundry/templates.json`, which the IDE regenerates a moment after an edit, so wait a second or two after your last `wf` command. There's no IDE-side console access from `wf`.
+`wf set-page-preview preview` runs the page live in the IDE, but `wf` can't click or type in it. To test interactions, serve the project folder as static files with every unknown path falling back to `/index.html` (that's what `_redirects` declares; e.g. `npx serve -s .`, which redirects `/x.html` to `/x`, and both work) and drive it with a headless browser such as Playwright. Pages render from `webfoundry/templates.json`, which the IDE regenerates a moment after an edit, so wait a second or two after your last `wf` command. There's no IDE-side console access from `wf`. To check native looks in that browser, set on `<html>` the attributes Platform Preview uses, before the page renders (e.g. Playwright's `addInitScript`): `wf-native-preview`, plus `wf-desktop-preview` or `wf-mobile-preview`, plus `wf-lin-preview`, `wf-win-preview` or `wf-android-preview` for an OS.
+
+### Editing HTML without Webfoundry
+
+When no Webfoundry tab has the project open (`wf instances` doesn't list it), the DOM commands can't reach it, and you may edit `.html` files directly. Pages render from `webfoundry/templates.json`, so after editing HTML (or adding or removing `.html` / `.js` files), run:
+
+* `wf reflect` – regenerates `webfoundry/templates.json` and `webfoundry/scripts.json` from the files on disk. It needs no IDE or Companion. It also checks every file under `pages/` and `components/` and exits non-zero listing what to fix.
+
+Keep the structure `wf create-file` scaffolds, which is what `wf reflect` checks:
+
+* `<head>` holds only `<meta>`, `<title>` and the generated runtime loader `<script>`; nothing else (no `<link>`, `<style>` or other scripts; styling is Tailwind classes, logic goes in controllers).
+* Nothing sits outside `<head>` and `<body>`, and nothing outside `<html>`.
+* In pages, `<body>` keeps `class="flex flex-col [&>div:first-child]:flex-1 …"` and `style="display: none"`, and its only element is the root `div`, which holds all content and doesn't set `h-screen` / `min-h-screen`.
 
 ### Usage Notes & Validation Rules
 
@@ -474,13 +490,14 @@ Flag aliases: `--ids` (change-selection), `--classes` (add/remove-css-classes), 
   * `wf.config.js not found`: run from inside the project.
   * `WF_CLIENT_KEY not found`: start the Companion once, or set the variable.
   * `Connection timed out.`: the Companion isn't reachable.
+  * `No response from the Companion.`: it accepted the command but never answered; retry, and check that the Companion is still running.
   * `Webfoundry project not connected: <name>`: open that project in the IDE with Companion enabled.
   * `Timed out waiting for Webfoundry response`: the IDE took over 10s, often because a dialog is waiting for the user. `wf set-src` and `wf set-input-value` open one when given neither a value nor `--expr`.
   * `Designer closed`: pass `--page pages/x.html`.
   * `This command requires --target`: pass the element IDs from `wf read-html`.
   * `No elements selected.`: pass `--target` (only `wf copy-selected` and `wf toggle-selection` can still hit this).
   * `Can't edit in preview mode.`: run `wf set-page-preview edit`.
-* *NEVER* use text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands.
+* While the project is open in Webfoundry, *NEVER* use text-based HTML edits (`echo` with redirect, `python` read/writes, `apply_patch`, etc.); always rely on the `wf` subcommands. Without an open tab, edit directly and run `wf reflect`.
 
 ---
 
@@ -494,7 +511,7 @@ Flag aliases: `--ids` (change-selection), `--classes` (add/remove-css-classes), 
 * **Lists**: `wf-map="x of expr"`
 * **Events**: `wf-on<event>="expr"`
 * **Lifecycle hooks**: `wf-onattach`, `wf-ondetach`
-* **Pages**: live in `pages/`; create them with `wf create-file` so `<head>` has the runtime scripts (`../webfoundry/ifdesigner.js`, `../webfoundry/head.js`)
+* **Pages**: live in `pages/`, nested folders included; create them with `wf create-file` so `<head>` has the script that loads the runtime (`webfoundry/ifdesigner.js`, `webfoundry/head.js`) from the project root
 
 ---
 
@@ -508,7 +525,7 @@ Put that source file in the project, then call `remove_background`. `input` is t
 
 Use `remove_background` only when the background is a flat key color that should disappear. Leave plates, photos, and pictures whose background is part of the art alone.
 
-In page HTML, an image `src` is `../media/...`. Mounting the page strips one leading `../` from `src` and from every CSS `url(...)` in inline `style` attributes, including `background-image` and `border-image-source`. This is the same one prefix, once:
+In page HTML, an image `src` is `../media/...` (one more `../` per folder under `pages/`). Mounting the page strips one leading `../` from `src` and from every CSS `url(...)` in inline `style` attributes, including `background-image` and `border-image-source`. This is the same one prefix, once:
 
 ```html
 style="border-image-source: url('../media/ui/dialog-frame.png')"

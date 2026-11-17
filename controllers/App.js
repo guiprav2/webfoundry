@@ -1,5 +1,4 @@
 import '../other/util.js';
-import { setOpenAIKey } from '../other/openai.js';
 
 export default class App {
   actions = {
@@ -12,7 +11,7 @@ export default class App {
       ) {
         return location.href = `https://webfoundry.app/editor.html${location.search}`;
       }
-      this.consumeQueryKey();
+      this.scrubQueryKey();
       this.state.demo = location.search.includes('demo');
       if (this.state.demo) document.body.classList.add('text-xs');
       sessionStorage.webfoundryTabId ??= crypto.randomUUID();
@@ -66,6 +65,7 @@ export default class App {
       if (this.state.docs) return;
       try {
         let canvas = document.querySelector('#Canvas');
+        if (!canvas) return;
         let empty = [...canvas.children].slice(1).every(x => x.classList.contains('hidden'));
         if (this.state.brandCanvas === empty) return;
         this.state.brandCanvas = empty;
@@ -76,11 +76,11 @@ export default class App {
     },
   };
 
-  consumeQueryKey() {
+  // Old landing links passed the API key as ?oaiKey=. Never store a key from a URL (anyone could craft
+  // one to route a visitor's prompts through their account); just drop it from the address bar.
+  scrubQueryKey() {
     let params = new URLSearchParams(location.search || '');
     if (!params.has('oaiKey')) return;
-    let incoming = (params.get('oaiKey') || '').trim();
-    if (incoming) setOpenAIKey(incoming);
     params.delete('oaiKey');
     let query = params.toString();
     let target = `${location.pathname}${query ? `?${query}` : ''}${location.hash || ''}`;

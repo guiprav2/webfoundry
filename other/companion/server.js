@@ -86,7 +86,7 @@ export default function server(key, opt = {}) {
     let client = resolveInstance(instance, projectId);
     let id = crypto.randomUUID();
     client.send(JSON.stringify({ type: 'wf:invoke', id, command }));
-    return await awaitWFResult(id, command?.params?.page || command?.name === 'createProject' ? 40000 : 10000); // Pages and new projects may take a while to load.
+    return await awaitWFResult(id, wfCommandTimeout(command));
   });
 
   // Loopback only, and only browser pages from Webfoundry's own origins (the CLI sends no Origin).
@@ -178,4 +178,12 @@ export default function server(key, opt = {}) {
   ret.wss = wss;
   ret.dispose = () => ret.wss.close();
   return ret;
+}
+
+// How long the IDE gets to answer a wf command. Pages and new projects may take a while to load;
+// a deploy zips, uploads and waits for Netlify to finish. The CLI waits 5s longer (other/wf.js).
+function wfCommandTimeout(command) {
+  if (command?.name === 'deploy') return 600000;
+  if (command?.params?.page || command?.name === 'createProject') return 40000;
+  return 10000;
 }

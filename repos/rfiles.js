@@ -1,7 +1,7 @@
-import JSZip from 'https://esm.run/jszip';
-import lf from 'https://esm.run/localforage';
+import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.2/+esm';
+import lf from 'https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm';
 import rprojects from './rprojects.js';
-import { lookup as mimeLookup } from 'https://esm.run/mrmime';
+import { lookup as mimeLookup } from 'https://cdn.jsdelivr.net/npm/mrmime@2.0.1/+esm';
 
 class FilesRepository {
   async list(project) {
@@ -63,8 +63,9 @@ class FilesRepository {
           await post('broadcast.publish', 'files:rm', { project, path: `${name}/${path}` });
           await post('broadcast.publish', 'files:add', { project, path: `${name}/${newPath}` });
         } else {
-          for (let x of (await lf.keys()).filter(x => x.startsWith(`webfoundry:projects:files:${uuid}:${path}`))) {
-            let y = x.replace(new RegExp(`^webfoundry:projects:files:${uuid}:${path}`), `webfoundry:projects:files:${uuid}:${newPath}`);
+          let prefix = `webfoundry:projects:files:${uuid}:${path}`;
+          for (let x of (await lf.keys()).filter(x => x.startsWith(prefix))) {
+            let y = `webfoundry:projects:files:${uuid}:${newPath}${x.slice(prefix.length)}`;
             let blob = await lf.getItem(x);
             await lf.setItem(y, blob);
             await lf.removeItem(x);
@@ -85,7 +86,7 @@ class FilesRepository {
     let storage = rprojects.storage(project);
     switch (storage) {
       case 'local': {
-        if (!path.endsWith('/')) lf.removeItem(`webfoundry:projects:files:${uuid}:${path}`);
+        if (!path.endsWith('/')) await lf.removeItem(`webfoundry:projects:files:${uuid}:${path}`);
         else for (let x of (await lf.keys()).filter(x => x.startsWith(`webfoundry:projects:files:${uuid}:${path}`))) await lf.removeItem(x);
         await post('broadcast.publish', 'files:rm', { project, path: `${name}/${path}` });
         break;

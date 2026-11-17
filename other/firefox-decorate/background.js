@@ -2,7 +2,7 @@
 // Everything here is scoped per tab: a site is only unframed/injected while it is the
 // direct child of an editor that registered its origin. Ordinary browsing is untouched.
 
-// tabId -> { wfOrigin, wfFrameId, isolated, targets: Set<origin>, frameIds: Set<frameId>, activeFrameId }
+// tabId -> { wfOrigin, wfFrameId, targets: Set<origin>, frameIds: Set<frameId>, activeFrameId }
 let sessions = new Map();
 
 // In dependency order: frame-bridge.js rewrites each file's imports of the earlier ones.
@@ -39,20 +39,7 @@ let originOf = url => {
   try { return new URL(url).origin } catch { return null }
 };
 
-let setHeader = (headers, name, value) => {
-  let lower = name.toLowerCase();
-  return [...headers.filter(h => h.name.toLowerCase() !== lower), { name, value }];
-};
-
 let FRAME_BLOCKING_HEADERS = /^(x-frame-options|content-security-policy|cross-origin-opener-policy|cross-origin-embedder-policy|cross-origin-resource-policy)$/i;
-
-// A production editor is cross-origin isolated (COEP: require-corp), so anything it embeds
-// must opt in as well, or Firefox refuses to load the frame.
-function withIsolationHeaders(session, headers) {
-  if (!session.isolated) return headers;
-  headers = setHeader(headers, 'Cross-Origin-Embedder-Policy', 'credentialless');
-  return setHeader(headers, 'Cross-Origin-Resource-Policy', 'cross-origin');
-}
 
 browser.webRequest.onHeadersReceived.addListener(details => {
   let session = sessions.get(details.tabId);
@@ -67,13 +54,7 @@ browser.webRequest.onHeadersReceived.addListener(details => {
       return;
     }
     session.frameIds.add(details.frameId);
-    let headers = details.responseHeaders.filter(h => !FRAME_BLOCKING_HEADERS.test(h.name));
-    return { responseHeaders: withIsolationHeaders(session, headers) };
-  }
-
-  // Frames nested inside a decorated site aren't decorated, but they must still pass COEP.
-  if (ancestors.some(x => session.frameIds.has(x.frameId))) {
-    return { responseHeaders: withIsolationHeaders(session, details.responseHeaders) };
+    return { responseHeaders: details.responseHeaders.filter(h => !FRAME_BLOCKING_HEADERS.test(h.name)) };
   }
 }, { urls: ['<all_urls>'], types: ['sub_frame'] }, ['blocking', 'responseHeaders']);
 
@@ -86,10 +67,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case 'register': {
       let wfOrigin = originOf(sender.url);
       if (!session || session.wfFrameId !== sender.frameId || session.wfOrigin !== wfOrigin) {
-        session = { wfOrigin, wfFrameId: sender.frameId, isolated: false, targets: new Set(), frameIds: new Set(), activeFrameId: null };
+        session = { wfOrigin, wfFrameId: sender.frameId, targets: new Set(), frameIds: new Set(), activeFrameId: null };
         sessions.set(tabId, session);
       }
-      session.isolated = !!message.isolated;
       session.targets.add(new URL(message.origin).origin);
       return Promise.resolve({ ok: true, version: browser.runtime.getManifest().version });
     }

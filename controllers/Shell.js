@@ -1,5 +1,5 @@
-import { FitAddon } from 'https://esm.run/xterm-addon-fit';
-import { Terminal } from 'https://esm.run/xterm';
+import { FitAddon } from 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/+esm';
+import { Terminal } from 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/+esm';
 
 export default class Shell {
   state = { list: [] };
@@ -7,7 +7,7 @@ export default class Shell {
   actions = {
     init: () => {
       let { bus } = state.event;
-      document.head.append(d.el('link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/xterm/css/xterm.css' }));
+      document.head.append(d.el('link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css' }));
       document.head.append(d.el('style', `.xterm-selection { display: none }`));
       document.body.classList.add('w-screen', 'overflow-hidden');
       if (state.collab.uid !== 'master') return;

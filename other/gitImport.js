@@ -1,5 +1,5 @@
-import git from 'https://esm.run/isomorphic-git';
-import gitHttp from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js';
+import git from 'https://cdn.jsdelivr.net/npm/isomorphic-git@1.44.12/+esm';
+import gitHttp from 'https://unpkg.com/isomorphic-git@1.0.0-beta.36/http/web/index.js';
 
 export let gitCorsProxy = 'https://cors.isomorphic-git.org';
 

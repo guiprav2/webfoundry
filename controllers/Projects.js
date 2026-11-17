@@ -3,10 +3,39 @@ import rprojects from '../repos/rprojects.js';
 import { defaultHtml } from '../other/templates.js';
 import { DECORATION_FILE, esc, stripClarity } from '../other/util.js';
 
+// Every unknown path falls back to the app shell, whose router renders the page (see AGENTS.md: Testing a page).
+let PROJECT_REDIRECTS = '/*    /index.html    200\n';
+
 export default class Projects {
-  state = { list: [] };
+  state = {
+    list: [],
+    // Local projects live in IndexedDB; the notice reminds their owners to export (dismissal is per browser).
+    storageNoticeDismissed: (() => { try { return !!localStorage.getItem('webfoundry:storageNotice:dismissed') } catch { return false } })(),
+    get hasLocal() { return this.list.some(x => rprojects.storage(x) === 'local') },
+  };
+
+  persistRequested = false;
 
   actions = {
+    // Asks the browser not to evict IndexedDB (Safari drops it after 7 days without a visit).
+    // Once per page load, on opening a local project: Firefox prompts, Chrome decides from engagement.
+    persistStorage: async () => {
+      if (this.persistRequested || !navigator.storage?.persist) return;
+      this.persistRequested = true;
+      try {
+        if (await navigator.storage.persisted()) return true;
+        return await navigator.storage.persist();
+      } catch (err) {
+        console.warn('navigator.storage.persist failed:', err);
+        return false;
+      }
+    },
+
+    dismissStorageNotice: () => {
+      this.state.storageNoticeDismissed = true;
+      try { localStorage.setItem('webfoundry:storageNotice:dismissed', '1') } catch {}
+    },
+
     init: async () => {
       let { bus } = state.event;
       bus.on('projects:create:ready', async ({ project }) => {
@@ -75,7 +104,6 @@ export default class Projects {
         await Promise.all([
           'AGENTS.md',
           'index.html',
-          'webfoundry/_redirects',
           'webfoundry/wf.config.js',
           'webfoundry/app.js',
           'webfoundry/bimap.js',
@@ -92,9 +120,10 @@ export default class Projects {
           if (x === 'index.html') text = stripClarity(text).replace('<title>Webfoundry</title>', `<title>${esc(name)}</title>`);
           let target = x;
           if (target.endsWith('/wf.config.js')) target = 'wf.config.js';
-          if (target.endsWith('/_redirects')) target = '_redirects';
           await rfiles.save(project, target, new Blob([text], { type: mimeLookup(x) }));
         }));
+        // Written inline: hosts like Netlify consume _redirects instead of serving it, so it can't be fetched.
+        await rfiles.save(project, '_redirects', new Blob([PROJECT_REDIRECTS], { type: 'text/plain' }));
         await rfiles.save(project, 'pages/index.html', new Blob([defaultHtml()], { type: 'text/html' }));
         bus.emit('projects:create:ready', { project });
         return project;
@@ -146,6 +175,7 @@ export default class Projects {
         return { success: false, reason: `Project not found` };
       }
       this.state.current = project;
+      if (project && !state.app.demo && rprojects.storage(project) === 'local') post('projects.persistStorage');
       bus.emit('projects:select:ready', { project });
     },
   };

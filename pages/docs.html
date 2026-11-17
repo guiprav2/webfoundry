@@ -8,12 +8,20 @@
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
     <script>
+      // rootPrefix is the project's base URL, so the runtime loads from pages at any depth.
       window.rootPrefix = /^\/(files|preview)\//.test(location.pathname)
         ? location.pathname.split('/').slice(0, 4).join('/')
         : '/';
+      for (let [src, module] of [
+        ['webfoundry/ifdesigner.js', true],
+        ['webfoundry/head.js', false],
+      ]) {
+        let s = document.createElement('script');
+        s.src = rootPrefix.replace(/\/$/, '') + '/' + src;
+        module ? (s.type = 'module') : (s.async = false);
+        document.head.append(s);
+      }
     </script>
-    <script type="module" src="../webfoundry/ifdesigner.js"></script>
-    <script src="../webfoundry/head.js"></script>
   </head>
   <body
     class="flex flex-col [&amp;&gt;div:first-child]:flex-1 min-h-screen"
@@ -139,7 +147,7 @@
                 </div>
                 <div>
                   Select the placeholder element that says
-                  <span class="italic">"Page intentionally left blank."</span>
+                  <span class="italic">"Start building!"</span>
                 </div>
                 <div>
                   Click placeholder element then: Top toolbar →

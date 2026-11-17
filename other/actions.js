@@ -1,12 +1,12 @@
 import codex from './codex.js';
 import complete from './complete.js';
-import confetti from 'https://esm.run/canvas-confetti';
+import confetti from 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/+esm';
 import rfiles from '../repos/rfiles.js';
 import { applyPatch } from './diff.js';
 import { getOpenAIKey, complete as openaiComplete } from './openai.js';
 import { ifeval, loadman, joinPath } from '../other/util.js';
-import { lookup as mimeLookup } from 'https://esm.run/mrmime';
-import { minimatch } from 'https://esm.run/minimatch';
+import { lookup as mimeLookup } from 'https://cdn.jsdelivr.net/npm/mrmime@2.0.1/+esm';
+import { minimatch } from 'https://cdn.jsdelivr.net/npm/minimatch@11.0.8/+esm';
 
 let TAILWIND_HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone'];
 let TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
@@ -106,6 +106,8 @@ let SHELL_COMMAND_GROUPS = [
       { syntax: 'setProjectTitle [title]', description: 'Set the project title.', tool: 'setProjectTitle', args: [{ name: 'title', description: 'New project title' }] },
       { syntax: 'getPageTitle', description: 'Open page title (blank uses the project title).', tool: 'getPageTitle' },
       { syntax: 'setPageTitle [title]', description: 'Set the open page title (blank uses the project title).', tool: 'setPageTitle', args: [{ name: 'title', description: 'New page title, or blank' }] },
+      { syntax: 'deploy [--site name-or-id | --new name] [--preview]', description: "Deploy the project to Netlify with the user's stored key.", tool: 'deploy', args: [{ name: 'site', description: 'Existing site name, domain or ID' }, { name: 'newSite', description: 'Name for a new site' }, { name: 'preview', description: 'Draft deploy instead of production' }] },
+      { syntax: 'deployInfo', description: 'Whether a Netlify key is stored and which site the project deploys to.', tool: 'deployInfo' },
     ],
   },
   {
@@ -888,6 +890,13 @@ let actions = window.actions = {
       if (!state.designer.scoped && state.collab.uid === cur) await post('designer.toggleMobileKeyboard');
       await post('designer.sync', state.designer.target);
       await post('collab.sync');
+      // Following agents: an agent selecting in another page (--page) brings that page up,
+      // unless the user has a selection of their own. Not awaited, so the agent isn't held up.
+      let current = state.designer.current;
+      if (resolved.length && /(^|\/)agent:/.test(cur) && state.designer.followAgents && frame !== current && !frame.decoration
+          && !current?.cursors?.[state.collab.uid]?.length) {
+        post('designer.followAgentTo', frame.path, cur).catch(err => console.error(err));
+      }
       state.event.bus.emit('actions:changeSelection:ready', { s });
       let result = { success: true, selectedIds: [...frame.cursors[cur]] };
       if (missing.length) result.missingIds = missing;
@@ -918,6 +927,13 @@ let actions = window.actions = {
       if (sel.length) await actions.changeSelection.handler({ cur, s: [] });
       else if (frame.lastCursors[cur]?.length) await actions.changeSelection.handler({ cur, s: frame.lastCursors[cur] });
     },
+  },
+
+  toggleFollowAgents: {
+    description: `Turns following agent cursors on or off. While on, the canvas scrolls to whatever an agent selects whenever the user has no selection of their own`,
+    shortcut: 'f',
+    parameters: { type: 'object', properties: { on: { type: 'boolean', description: `Turn following on (true) or off (false); omit to toggle` } } },
+    handler: async ({ on } = {}) => ({ success: true, followAgents: await post('designer.toggleFollowAgents', typeof on === 'boolean' ? on : undefined) }),
   },
 
   selectParentElement: {
@@ -2478,6 +2494,23 @@ let actions = window.actions = {
     },
   },
 
+  deploy: {
+    description: `Deploys the project to Netlify using the API key the user stored in this browser. Uses the project's linked site unless site (existing site name, domain or ID) or newSite (name for a new site) is given; preview makes a draft deploy instead of publishing`,
+    disabled: () => [!state.projects.current && `No project open.`, state.collab.uid !== 'master' && `Peers can't deploy the host's project.`],
+    parameters: { type: 'object', properties: { site: { type: 'string' }, newSite: { type: 'string' }, preview: { type: 'boolean' } } },
+    handler: async ({ site, newSite, preview } = {}) => {
+      if (site && newSite) return { success: false, error: `Pass either site or newSite, not both.` };
+      return await post('files.deployHeadless', { site, newSite, preview: !!preview });
+    },
+  },
+
+  deployInfo: {
+    description: `Reports whether a Netlify API key is stored in this browser and which site the project deploys to`,
+    disabled: () => [!state.projects.current && `No project open.`, state.collab.uid !== 'master' && `Peers can't see the host's deploy settings.`],
+    parameters: { type: 'object', properties: {} },
+    handler: async () => await post('files.deployInfo'),
+  },
+
   getPageTitle: {
     description: `Returns the open page's title. Blank means the page uses the project title`,
     disabled: () => [!state.designer.targetOpen && `Designer closed.`],
@@ -2496,12 +2529,19 @@ let actions = window.actions = {
     parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
     handler: async ({ title } = {}) => {
       let frame = state.designer.target;
+      title ??= '';
+      // Change the page's own head too: every snapshot from the frame morphs its head into the
+      // mirror, so a mirror-only change was lost whenever one arrived before the save.
+      await ifeval(({ args }) => {
+        let el = document.head.querySelector('title') ?? document.head.appendChild(document.createElement('title'));
+        el.textContent = args.title;
+      }, { title });
       let el = frame.head.querySelector('title');
       if (!el) frame.head.append(el = frame.doc.createElement('title'));
-      el.textContent = title ?? '';
+      el.textContent = title;
       await post('designer.save', frame);
       await post('designer.flushSave', frame);
-      return { success: true, title: el.textContent };
+      return { success: true, title };
     },
   },
 

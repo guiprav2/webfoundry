@@ -1,5 +1,5 @@
-import { minimatch } from 'https://esm.run/minimatch@10.2.6';
-import { parse as parseBash } from 'https://esm.run/unbash@5.0.0';
+import { minimatch } from 'https://cdn.jsdelivr.net/npm/minimatch@10.2.6/+esm';
+import { parse as parseBash } from 'https://cdn.jsdelivr.net/npm/unbash@5.0.0/+esm';
 import { parseWfInvocation, formatWfResult } from './wf-commands.js';
 import { execWfCommand } from '../controllers/Companion.js';
 

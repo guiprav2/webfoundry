@@ -42,16 +42,24 @@ function readOptional(filePath) {
 
 function createServer({ root, host, port, certPath, keyPath }) {
   let handler = (req, res) => {
-    let urlPath = decodeURIComponent(req.url.split('?')[0]);
+    let notFound = () => {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not found');
+    };
+    let urlPath;
+    try { urlPath = decodeURIComponent(req.url.split('?')[0]) } catch { return notFound() }
     if (urlPath.endsWith('/')) urlPath += 'index.html';
-    let filePath = path.join(root, urlPath);
+    let filePath = path.resolve(root, `.${path.posix.sep}${urlPath}`);
+    // Decoded %2f..%2f segments must not escape the root.
+    if (urlPath.includes('\0') || (filePath !== root && !filePath.startsWith(root + path.sep))) return notFound();
 
     let sendFile = fp => {
       fs.stat(fp, (err, stats) => {
         if (err || !stats.isFile()) return sendIndex();
         let ext = path.extname(fp).toLowerCase();
         let mime = MIME_TYPES[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-store' });
+        // Content-Length lets native export show runtime download progress.
+        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-store', 'Content-Length': stats.size });
         fs.createReadStream(fp).pipe(res);
       });
     };

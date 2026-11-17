@@ -127,7 +127,7 @@ export default class Decoration {
       let res = await new Promise(resolve => {
         let timer = setTimeout(() => resolve(null), 1500);
         this.rpcs.set(rpcid, data => { clearTimeout(timer); resolve(data) });
-        window.postMessage({ wfDecorateBridge: true, type: 'register', rpcid, origin, isolated: window.crossOriginIsolated }, location.origin);
+        window.postMessage({ wfDecorateBridge: true, type: 'register', rpcid, origin }, location.origin);
       });
       this.rpcs.delete(rpcid);
       this.state.extensionVersion = res?.ok ? res.version : null;

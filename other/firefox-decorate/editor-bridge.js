@@ -12,10 +12,10 @@
 
   window.addEventListener('message', async ev => {
     if (ev.source !== window || ev.origin !== location.origin || !ev.data?.wfDecorateBridge) return;
-    let { type, rpcid, origin, isolated, json } = ev.data;
+    let { type, rpcid, origin, json } = ev.data;
     if (type === 'register') {
       try {
-        let res = await browser.runtime.sendMessage({ kind: 'register', origin: String(origin), isolated: !!isolated });
+        let res = await browser.runtime.sendMessage({ kind: 'register', origin: String(origin) });
         toPage({ type: 'registered', rpcid: String(rpcid), ok: !!res?.ok, version: res?.version });
       } catch (err) {
         toPage({ type: 'registered', rpcid: String(rpcid), ok: false, error: String(err) });

@@ -8,12 +8,20 @@
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
     <script>
+      // rootPrefix is the project's base URL, so the runtime loads from pages at any depth.
       window.rootPrefix = /^\/(files|preview)\//.test(location.pathname)
         ? location.pathname.split('/').slice(0, 4).join('/')
         : '/';
+      for (let [src, module] of [
+        ['webfoundry/ifdesigner.js', true],
+        ['webfoundry/head.js', false],
+      ]) {
+        let s = document.createElement('script');
+        s.src = rootPrefix.replace(/\/$/, '') + '/' + src;
+        module ? (s.type = 'module') : (s.async = false);
+        document.head.append(s);
+      }
     </script>
-    <script type="module" src="../webfoundry/ifdesigner.js"></script>
-    <script src="../webfoundry/head.js"></script>
   </head>
   <body style="display: none" class="bg-slate-950 text-slate-100 min-h-screen">
     <div
@@ -236,6 +244,7 @@
             <button
               class="self-start rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-slate-900 shadow-md shadow-emerald-500/40 transition hover:bg-emerald-300"
               wf-onclick="post('playground.fireGreeting')"
+              value=""
             >
               Say hello
             </button>
@@ -257,6 +266,7 @@
             class="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-left text-sm text-white/80 transition hover:border-emerald-400/70 hover:text-white"
             wf-class="{{task.done &amp;&amp; 'border-emerald-400/70 text-emerald-200'}}"
             wf-onclick="post('playground.toggleTask', task.id)"
+            value=""
           >
             <span
               class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/40 text-xs"
@@ -277,6 +287,7 @@
           <button
             class="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900 shadow-md shadow-emerald-500/40 transition hover:bg-emerald-300"
             wf-onclick="post('playground.addTask')"
+            value=""
           >
             Add task
           </button>
@@ -284,6 +295,7 @@
         <button
           class="text-xs font-semibold uppercase tracking-[0.25em] text-white/50 transition hover:text-white mt-5"
           wf-onclick="post('playground.clearCompleted')"
+          value=""
         >
           Clear completed tasks
         </button>

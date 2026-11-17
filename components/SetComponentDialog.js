@@ -1,4 +1,4 @@
-import * as pako from 'https://esm.run/pako';
+import * as pako from 'https://cdn.jsdelivr.net/npm/pako@3.0.3/+esm';
 import rfiles from '../repos/rfiles.js';
 
 let componentEntriesFromTemplates = templates => {

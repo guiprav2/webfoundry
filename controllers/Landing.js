@@ -1,23 +1,22 @@
-import { getOpenAIKey, setOpenAIKey } from '../other/openai.js';
-
 // Load the editor from whatever origin is serving this page, so the demo runs this same build.
+// Demos are archives built by other/build-demos.js, served by this site (no Git CORS proxy on each visit).
 let editorOrigin = `${location.origin}/`;
 
 let templates = [
   {
     id: 'counter',
     label: 'Counter',
-    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/counter.git`,
+    href: `${editorOrigin}editor.html?demo&autoplay&zip=demos/counter.zip`,
   },
   {
     id: 'todomvc',
     label: 'TodoMVC',
-    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/todomvc.git`,
+    href: `${editorOrigin}editor.html?demo&autoplay&zip=demos/todomvc.zip`,
   },
   {
     id: 'self',
     label: 'Webfoundry itself',
-    href: `${editorOrigin}editor.html?demo&autoplay&git=https://github.com/guiprav2/webfoundry.git`,
+    href: `${editorOrigin}editor.html?demo&autoplay&zip=demos/webfoundry.zip`,
   },
 ];
 let defaultTemplate = templates.find(x => x.id === 'counter');
@@ -26,13 +25,10 @@ export default class Landing {
   state = {
     templates,
     currentTemplate: defaultTemplate.id,
-    currentKey: '',
-    pendingKey: '',
     frameSrc: defaultTemplate.href,
     frameCaption: defaultTemplate.href.replace(editorOrigin, ''),
     editorHost: location.host,
     frameLoaded: false,
-    showKeyModal: false,
     showDemoModal: false,
     mobileMenuOpen: false,
     year: new Date().getFullYear(),
@@ -40,7 +36,6 @@ export default class Landing {
 
   actions = {
     init: () => {
-      this.loadPersistedKey();
       this.setFrameSrc();
       document.addEventListener('keydown', ev => {
         if (ev.key === 'Escape' && this.state.showDemoModal) this.actions.closeDemoModal();
@@ -61,19 +56,6 @@ export default class Landing {
     frameLoaded: () => {
       if (this.state.frameSrc === 'about:blank') return;
       this.state.frameLoaded = true;
-    },
-    openKeyModal: () => {
-      this.state.pendingKey = this.state.currentKey;
-      this.state.showKeyModal = true;
-    },
-    closeKeyModal: () => {
-      this.state.showKeyModal = false;
-    },
-    applyKey: () => {
-      this.state.currentKey = (this.state.pendingKey || '').trim();
-      setOpenAIKey(this.state.currentKey);
-      this.state.showKeyModal = false;
-      this.setFrameSrc();
     },
     popout: () => {
       window.open(this.buildFrameUrl(), '_blank', 'noopener,noreferrer');
@@ -107,13 +89,6 @@ export default class Landing {
     this.state.frameCaption = this.selectedHref().replace(editorOrigin, '');
   }
 
-  loadPersistedKey() {
-    let stored = (getOpenAIKey() || '').trim();
-    if (!stored) return;
-    this.state.currentKey = stored;
-    this.state.pendingKey = stored;
-  }
-
   selectedHref() {
     let selected = this.state.templates.find(
       template => template.id === this.state.currentTemplate,
@@ -121,10 +96,8 @@ export default class Landing {
     return selected ? selected.href : `${editorOrigin}editor.html`;
   }
 
+  // The iframe is same-origin, so it already shares the visitor's stored API keys; none go in the URL.
   buildFrameUrl() {
-    let base = this.selectedHref();
-    if (!this.state.currentKey) return base;
-    let join = base.includes('?') ? '&' : '?';
-    return `${base}${join}oaiKey=${encodeURIComponent(this.state.currentKey)}`;
+    return this.selectedHref();
   }
 }

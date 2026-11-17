@@ -1,4 +1,4 @@
-import EventEmitter from 'https://esm.run/eventemitter2';
+import EventEmitter from 'https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/+esm';
 import rprojects from '../repos/rprojects.js';
 import { userAction, withPage } from '../other/shadowEditors.js';
 
@@ -439,6 +439,8 @@ async function runWfCommand(command) {
         return { success: false, error: err?.message || String(err) };
       }
     }
+    case 'deploy':
+    case 'deployInfo':
     case 'getProjectTitle':
     case 'setProjectTitle':
     case 'getPageTitle':

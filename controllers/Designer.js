@@ -1,11 +1,11 @@
 import BiMap from '../other/bimap.js';
-import Boo from 'https://esm.run/@camilaprav/boo@1.0.6';
+import Boo from 'https://cdn.jsdelivr.net/npm/@camilaprav/boo@1.0.6/+esm';
 import actions from '../other/actions.js';
-import htmlsnap from 'https://esm.run/@camilaprav/htmlsnap@0.0.16';
-import morphdom from 'https://esm.run/morphdom';
+import htmlsnap from 'https://cdn.jsdelivr.net/npm/@camilaprav/htmlsnap@0.0.16/+esm';
+import morphdom from 'https://cdn.jsdelivr.net/npm/morphdom@2.7.8/+esm';
 import prettier from '../other/prettier.js';
 import rfiles from '../repos/rfiles.js';
-import { arrayify, debounce, framePost, isDecorationPath } from '../other/util.js';
+import { arrayify, debounce, framePost, isDecorationPath, isolationLabel } from '../other/util.js';
 import { defaultHead } from '../other/templates.js';
 import { userAction } from '../other/shadowEditors.js';
 
@@ -92,7 +92,7 @@ export default class Designer {
       if (frame.preview) path = path.slice('pages/'.length);
       let fullpath = `/${frame.preview ? 'preview' : 'files'}/${sessionStorage.webfoundryTabId}/${name}:${uuid}/${path}`;
       if (!state.settings.opt.isolate) return fullpath;
-      let sub = `${name}-${uuid}`.toLowerCase().replace(/[^a-z0-9:-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      let sub = isolationLabel(state.projects.current);
       let host = location.hostname;
       let parts = host.split('.');
       let root;
@@ -119,6 +119,9 @@ export default class Designer {
 
     // Rendered size of the single selected element ("300x200"), measured inside the page iframe.
     selSize: null,
+    // Scroll the canvas to an agent's selection while you have none of your own ("f" toggles).
+    // Off on every load, never persisted.
+    followAgents: false,
 
     get tagLabel() {
       let s = this.current.cursors[state.collab.uid];
@@ -235,7 +238,7 @@ export default class Designer {
           let domain = parts.slice(1).join('.');
           let project = parts[0];
           if (!/^webfoundry.app|webfoundry\d+\.netlify\.app|localhost$/.test(domain)) return;
-          if (state.projects.current?.replaceAll?.(':', '-') !== project) return; // FIXME: Also check path.
+          if (!state.projects.current || isolationLabel(state.projects.current) !== project) return; // FIXME: Also check path.
         }
         await post('designer.frameMessage', ev.data);
       });
@@ -256,6 +259,7 @@ export default class Designer {
           else { frame.ready = true; frame.resolve() }
           await post('designer.applyPlatformPreview', frame);
           await post('designer.sync', frame);
+          if (state.collab.uid !== 'master') await post('collab.peerFrameReady', frame);
           if (!frame.decoration) await post('files.reflect'); // For templates.
           break;
         case 'htmlsnap': {
@@ -381,6 +385,24 @@ export default class Designer {
       for (let k of keys) colors[k] ??= cursorColor(Object.keys(colors).length);
     },
 
+    // Switches to the page an agent is selecting in and scrolls to its selection there.
+    followAgentTo: async (path, cur) => {
+      if (state.files.current !== path) await post('files.select', path);
+      // A background page reloads when it comes up; wait until it's current and ready.
+      let frame;
+      for (let i = 0; i < 100; i++) {
+        frame = this.state.list.find(x => x.path === path);
+        if (frame?.ready && frame === this.state.current) break;
+        await new Promise(pres => setTimeout(pres, 100));
+      }
+      if (!frame?.ready || frame !== this.state.current) return;
+      // Coming up can reload the frame after it reports ready, so the hint rides along with every
+      // sync for a few seconds; the canvas acts on each token once per loaded document.
+      let hint = frame.followCursor = { cur, token: `${Date.now()}:${Math.random()}` };
+      setTimeout(() => { if (frame.followCursor === hint) frame.followCursor = null }, 5000);
+      await post('designer.sync', frame);
+    },
+
     sync: frame => (this.actions.assignCursorColors(Object.keys(frame.cursors).filter(k => frame.cursors[k]?.length)), framePost(frame, {
       type: 'state',
       cursorColors: this.state.cursorColors,
@@ -390,7 +412,32 @@ export default class Designer {
       // Re-apply after ready/htmlsnap; isolate iframes cannot use contentDocument.
       platformPreview: platformForm(),
       platformOs: platformOs(),
+      followAgents: this.state.followAgents,
+      // Scroll to this cursor's selection even though it didn't change (followAgentTo).
+      followCursor: frame.followCursor,
     })),
+
+    // The host owns this toggle in collab sessions: peers ask it, and its sync tells everyone.
+    toggleFollowAgents: async on => {
+      if (state.collab.uid !== 'master') return state.collab.rtc?.send?.({ type: 'cmd', k: 'toggleFollowAgents', on });
+      this.state.followAgents = on ?? !this.state.followAgents;
+      for (let frame of this.state.list) if (frame.ready) await post('designer.sync', frame);
+      await post('collab.sync');
+      return this.state.followAgents;
+    },
+
+    // Peers: the host's follow and platform preview settings, from its sync (not saved locally).
+    applyHostView: async ({ followAgents, platformPreview, platformOs: os }) => {
+      let changed = this.state.followAgents !== !!followAgents
+        || state.settings.opt.platformPreview !== platformPreview || state.settings.opt.platformOs !== os;
+      if (!changed) return;
+      this.state.followAgents = !!followAgents;
+      state.settings.opt.platformPreview = platformPreview;
+      state.settings.opt.platformOs = os;
+      await post('designer.applyPlatformPreview');
+      for (let frame of this.state.list) if (frame.ready) await post('designer.sync', frame);
+      d.update();
+    },
 
     resize: ev => {
       ev.target.setPointerCapture(ev.pointerId);
@@ -529,6 +576,7 @@ export default class Designer {
       state.event.bus.emit('designer:save:ready', { project, path: frame.path });
     },
 
+    // Local to whoever presses it, host or peer: preview isn't part of collab sync.
     togglePreview: async () => {
       let frame = this.state.current;
       if (frame.decoration) return await post('decoration.togglePreview');
@@ -596,14 +644,23 @@ let loads = (window.wfThemeLoads ??= new Map());
 for (let [key, name] of Object.entries(args.themes)) {
   if (loads.has(name) || document.querySelector('style.wf-' + name)) continue;
   if (!document.querySelector('[class*="' + key + '-"]')) continue;
-  let base = (location.pathname.startsWith('/files/') ? '../' : '') + 'webfoundry/';
-  loads.set(name, fetch(base + name + '.tw.css').then(r => (r.ok ? r.text() : '')).then(css => {
+  // head.js defines wfProjectUrl; pages whose head.js predates it still set rootPrefix.
+  let url = window.wfProjectUrl ? wfProjectUrl('webfoundry/' + name + '.tw.css') : (window.rootPrefix || '').replace(/[/]$/, '') + '/webfoundry/' + name + '.tw.css'; // [/]: this is template-literal source
+  loads.set(name, fetch(url).then(r => (r.ok ? r.text() : '')).then(css => {
     if (!css || document.querySelector('style.wf-' + name)) return;
     let t = document.createElement('style');
     t.type = 'text/tailwindcss';
     t.className = 'wf-' + name;
     t.textContent = css;
     document.head.append(t);
+    // Same Inter weights head.js loads with Material (exports bundle them).
+    if (name === 'material' && !document.querySelector('link.wf-material-fonts')) {
+      let link = document.createElement('link');
+      link.className = 'wf-material-fonts';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap';
+      document.head.append(link);
+    }
   }).catch(() => {}));
 }
 let root = document.documentElement;
@@ -620,12 +677,14 @@ if (args.mode !== 'off') {
     // Form factor: off | desktop | mobile. Turning it off returns to plain Web.
     setPlatformPreview: async (mode) => {
       if (PLATFORM_OSES.includes(legacyOs(mode))) return await post('designer.setPlatformOs', mode); // legacy OS-as-mode
+      if (state.collab.uid !== 'master') return state.collab.rtc?.send?.({ type: 'cmd', k: 'setPlatformPreview', mode });
       if (mode !== 'off' && mode !== 'desktop' && mode !== 'mobile') {
         throw new Error('platform preview mode must be desktop, mobile, or off');
       }
       await post('settings.option', 'platformPreview', mode);
       if (mode === 'off' && platformOs() !== 'web') await post('settings.option', 'platformOs', 'web');
       await post('designer.applyPlatformPreview');
+      await post('collab.sync');
       d.update();
     },
 
@@ -636,11 +695,13 @@ if (args.mode !== 'off') {
       if (os !== 'web' && !PLATFORM_OSES.includes(os)) {
         throw new Error('platform OS must be web, win, lin, mac, or android');
       }
+      if (state.collab.uid !== 'master') return state.collab.rtc?.send?.({ type: 'cmd', k: 'setPlatformOs', os });
       await post('settings.option', 'platformOs', os);
       if (os === 'web') await post('settings.option', 'platformPreview', 'off');
       else if (platformForm() === 'off') await post('settings.option', 'platformPreview', os === 'android' ? 'mobile' : 'desktop');
       else if (platformForm() !== state.settings.opt.platformPreview) await post('settings.option', 'platformPreview', platformForm());
       await post('designer.applyPlatformPreview');
+      await post('collab.sync');
       d.update();
     },
 

@@ -38,7 +38,7 @@ export function attachImageTools(opts = {}) {
 }
 let { lookup: mimeLookup } = await (typeof process !== 'undefined' && process.versions?.node
   ? import('mrmime')
-  : import('https://esm.sh/mrmime'));
+  : import('https://esm.sh/mrmime@2.0.1'));
 
 let arrayify = x => Array.isArray(x) ? x : [x];
 let STATUS_MAX = 64;

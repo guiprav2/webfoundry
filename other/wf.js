@@ -22,6 +22,14 @@ async function main() {
       process.exit(parsed.code);
     }
     let command = parsed.command;
+    if (parsed.spec.local) {
+      let { configPath } = await resolveProjectId();
+      let { reflectProject } = await import('./reflect.js');
+      let formatted = formatWfResult(parsed.spec, reflectProject(path.dirname(configPath)), process.argv.slice(2));
+      process.stdout.write(formatted.stdout);
+      process.stderr.write(formatted.stderr);
+      process.exit(formatted.code ?? 0);
+    }
     let payload = { name: command.name || parsed.subcmd, params: command.params || {} };
     if (!payload.name) throw new Error('Unable to resolve command name.');
     let key = await loadClientKey();
@@ -100,10 +108,13 @@ async function invokeCompanion(key, proc, params, projectId) {
   return new Promise((resolve, reject) => {
     let ws = new WebSocket(ENDPOINT);
     let rpcid = crypto.randomUUID();
+    let sent = false;
+    // A few seconds past the Companion's own wait (10s, or 40s for pages and new projects), so its
+    // precise "Timed out waiting for Webfoundry response" arrives first when the IDE is the slow part.
     let timeout = setTimeout(() => {
       ws.terminate();
-      reject(new Error('Connection timed out.'));
-    }, params.command?.params?.page || params.command?.name === 'createProject' ? 45000 : 10000); // Pages and new projects may take a while to load.
+      reject(new Error(sent ? 'No response from the Companion.' : 'Connection timed out.'));
+    }, params.command?.name === 'deploy' ? 605000 : params.command?.params?.page || params.command?.name === 'createProject' ? 45000 : 15000);
 
     let dispose = (err) => {
       clearTimeout(timeout);
@@ -132,6 +143,7 @@ async function invokeCompanion(key, proc, params, projectId) {
       if (data.type === 'handshake' && data.status === 'ok') {
         ws.send(JSON.stringify({ type: 'identify', kind: 'cli', projectId }));
         ws.send(JSON.stringify({ type: `rpc:${proc}`, rpcid, projectId, ...params }));
+        sent = true;
         return;
       }
       if (data.type === 'rpc:response' && data.rpcid === rpcid) {

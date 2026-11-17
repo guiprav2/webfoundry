@@ -1,6 +1,6 @@
 import actions from '../other/actions.js';
-import autoassist from 'https://esm.run/@camilaprav/kittygpt@0.0.65/autoassist.js';
-import morphdom from 'https://esm.run/morphdom';
+import autoassist from 'https://cdn.jsdelivr.net/npm/@camilaprav/kittygpt@0.0.65/autoassist.js/+esm';
+import morphdom from 'https://cdn.jsdelivr.net/npm/morphdom@2.7.8/+esm';
 import { arrayify, debounce, resolve } from '../other/util.js';
 import { loadman } from '../other/util.js';
 import { userAction } from '../other/shadowEditors.js';
@@ -36,7 +36,7 @@ export default class Assistant {
         if (!this.state.tutorial || this.state.tutorial.includes('delta')) return;
         let els = s?.map?.(x => state.designer.current.map.get(x)) || [];
         let html = els.map(el => [...el.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent.trim()).filter(Boolean).join(' ')).join('\n');
-        if (!html.includes('intentionally left blank')) {
+        if (!/Start building!|intentionally left blank/.test(html)) { // New pages, then older ones
           await this.state.session.prompt(`cue joker: selected some other element`);
           return;
         }
@@ -50,8 +50,7 @@ export default class Assistant {
         this.state.tutorial = tutorial && [];
         this.state.initializing = true;
         d.update();
-        let prefix = location.pathname.includes('/files/') ? '../' : '';
-        let mss = d.el('script', { src: prefix + 'other/mespeak/mespeak.js' });
+        let mss = d.el('script', { src: wfProjectUrl('other/mespeak/mespeak.js') });
         document.head.append(mss);
         await new Promise((pres, prej) => { mss.onerror = prej; mss.onload = pres });
         await new Promise((pres, prej) => meSpeak.loadVoice('voices/en/en-us.json', success => success ? pres() : prej(new Error(`Could not load meSpeak voice`))));
@@ -95,7 +94,7 @@ export default class Assistant {
           zeta: `When you hear the words CUE-ZETA, cueZeta will contain a Codex reasoning string, read it aloud.`,
           cueAlpha: tutorial && `Give the user a warm welcome and tell them you're about to teach them some Webfoundry kickstarter tips & tricks. First, tell them to create a new project and name it any way they want. Explain how to navigate the UI to do so.`,
           cueBravo: tutorial && `Now that the project is created, instruct the user to click the index.html file in the pages directory.`,
-          cueCharlie: tutorial && `Explain they're looking at Webfoundry's visual editor now, which contains placeholder text that's safe to delete. For starters instruct them to select the "Page intentionally left blank" box.`,
+          cueCharlie: tutorial && `Explain they're looking at Webfoundry's visual editor now, which contains placeholder text that's safe to delete. For starters instruct them to select the "Start building!" box.`,
           cueDelta: tutorial && `Tell the user the blue box around the selection tells them they've just selected the element successfully. Silently call the throw confetti function first and then ask them to find and click the cross icon in the toolbar on the top-right corner.`,
           cueJoker: tutorial && `Tell the user what he just did and how, invite him to explore different things a little if he wants but gently nudge him back on track for the tutorial, politely asking of suggesting him to fulfill your last instruction next if he drifts for too long.`,
         }, fns);

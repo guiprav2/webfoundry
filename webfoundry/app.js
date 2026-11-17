@@ -1,11 +1,20 @@
-import anime from 'https://esm.run/animejs@3.2.2';
+import anime from 'https://cdn.jsdelivr.net/npm/animejs@3.2.2/+esm';
 import d from './dominant.js';
-import { camelCase } from 'https://esm.run/case-anything';
-import { marked } from 'https://esm.run/marked@13.0.1';
+import { camelCase } from 'https://cdn.jsdelivr.net/npm/case-anything@3.1.7/+esm';
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked@13.0.1/+esm';
 
 window.anime = anime;
 window.d = d;
 window.tap = x => (console.log(x), x);
+// Same helper as head.js (whichever loads first defines it): the project's base URL, from rootPrefix.
+window.wfProjectUrl ??= path => {
+  let p = window.rootPrefix ?? location.pathname.match(/^\/(?:files|preview)\/[^/]+\/[^/]+/)?.[0] ?? '';
+  if (p === '/') p = '';
+  return `${p === '.' ? '.' : p.replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
+};
+// wf-src values are project paths (media/x.png, or ../media/x.png as static srcs are written), resolved
+// against the project base so they work from pages at any depth. URLs, absolute paths and data: pass through.
+let projectSrc = v => typeof v !== 'string' || !v || /^([a-z][a-z\d+.-]*:|\/|#)/i.test(v) ? v : wfProjectUrl(v.replace(/^(\.\.?\/)+/, ''));
 
 let [scripts, templates] = await Promise.all([
   (async () => {
@@ -299,7 +308,10 @@ class App {
       parts[0] = 'index.html';
     }
     let path = 'pages/' + parts.join('/');
-    let templ = templates[path];
+    // Hosts with clean URLs (serve, Vercel cleanUrls, Netlify Pretty URLs) redirect
+    // /blog/post.html to /blog/post and /blog/index.html to /blog/.
+    let candidates = path.endsWith('/') ? [path + 'index.html'] : [path, path + '.html', path + '/index.html'];
+    let templ = candidates.map(x => templates[x]).find(Boolean);
     if (!templ) {
       templ = templates['pages/404.html'];
     }
@@ -416,9 +428,7 @@ function stripCssDotDot(style) {
 }
 
 function compile(root) {
-  // Prefer classes over inline style (Nasty keeps element.style read-only).
   root.hidden = false;
-  root.classList?.remove?.('hidden', 'invisible');
   for (let x of [root, ...root.querySelectorAll('*')]) {
     let ifExpr = x.getAttribute('wf-if');
     let mapExpr = x.getAttribute('wf-map');
@@ -485,7 +495,26 @@ function compile(root) {
         continue;
       }
       removedAttrs.push(name);
-      d.el(x, { [name.slice(3)]: () => wfevalAsync(x, value) });
+      // Pass the DOM event into scope as `event` (and mirror window.event).
+      // Nasty and some hosts lack the browser's legacy global `event` binding.
+      d.el(x, {
+        [name.slice(3)]: ev => {
+          let prevCtx = x.ctx;
+          x.ctx = { ...(prevCtx || {}), event: ev };
+          let prevWinEvent =
+            typeof window !== 'undefined' ? window.event : undefined;
+          let prevGlobalEvent = globalThis.event;
+          if (typeof window !== 'undefined') window.event = ev;
+          globalThis.event = ev;
+          try {
+            return wfevalAsync(x, value);
+          } finally {
+            x.ctx = prevCtx;
+            if (typeof window !== 'undefined') window.event = prevWinEvent;
+            globalThis.event = prevGlobalEvent;
+          }
+        },
+      });
     }
 
     for (let y of removedAttrs) {
@@ -557,7 +586,7 @@ function compile(root) {
       let expr = x.getAttribute('wf-src');
       x.removeAttribute('wf-src');
       x.removeAttribute('src');
-      d.el(x, { src: () => wfeval(x, expr) });
+      d.el(x, { src: () => projectSrc(wfeval(x, expr)) });
     }
 
     if (x.getAttribute('wf-alt')) {

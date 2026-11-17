@@ -1,12 +1,12 @@
-import * as pako from 'https://esm.run/pako';
+import * as pako from 'https://cdn.jsdelivr.net/npm/pako@3.0.3/+esm';
 import RealtimeCollab from '../other/RealtimeCollab.js';
 import actions from '../other/actions.js';
-import diff from 'https://esm.run/fast-diff';
-import morphdom from 'https://esm.run/morphdom';
+import diff from 'https://cdn.jsdelivr.net/npm/fast-diff@1.3.0/+esm';
+import morphdom from 'https://cdn.jsdelivr.net/npm/morphdom@2.7.8/+esm';
 import rfiles from '../repos/rfiles.js';
-import { FitAddon } from 'https://esm.run/xterm-addon-fit';
+import { FitAddon } from 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/+esm';
 import { ensureFrame, userAction, withPage } from '../other/shadowEditors.js';
-import { Terminal } from 'https://esm.run/xterm';
+import { Terminal } from 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/+esm';
 import { touchAgentCursor } from './Companion.js';
 
 export default class Collab {
@@ -121,12 +121,14 @@ export default class Collab {
 
     sync: async kind => {
       await post('designer.assignCursorColors', ['master', ...(this.state.rtc?.presence || []).map(x => x.user)]);
-      this.state.ver++;
       let snap = state.designer.open ? state.designer.current.snap : '';
+      // No session, nobody to send to: starting one (or a peer joining) sends a full sync anyway.
+      if (!this.state.rtc) { this.state.lastSnap = snap; return; }
+      this.state.ver++;
       let delta;
       if (kind === 'delta' && this.state.lastSnap) {
-        let diffs = diff(this.state.lastSnap, snap);
-        delta = await gzbase64(JSON.stringify(diffs));
+        let diffs = boundedDiff(this.state.lastSnap, snap);
+        if (diffs) delta = await gzbase64(JSON.stringify(diffs));
       }
       this.state.lastSnap = snap;
       this.state.rtc?.send?.({
@@ -138,8 +140,10 @@ export default class Collab {
         current: state.files.current,
         frameWidth: state.designer.frameWidth,
         frameHeight: state.designer.frameHeight,
-        preview: state.designer.current?.preview,
-        contents: kind === 'full' ? snap : undefined,
+        followAgents: state.designer.followAgents,
+        platformPreview: state.settings.opt.platformPreview,
+        platformOs: state.settings.opt.platformOs,
+        contents: kind === 'full' || (kind === 'delta' && !delta) ? snap : undefined,
         delta,
         cursors: state.designer.current?.cursors || {},
         cursorColors: state.designer.cursorColors,
@@ -210,13 +214,20 @@ export default class Collab {
       d.update();
     },
 
+    // Peer: a page frame (re)loaded, e.g. back from preview; show the host's latest edits.
+    peerFrameReady: async frame => {
+      let html = this.state.snaps[frame.path];
+      if (!html || frame.preview || frame.decoration) return;
+      frame.el?.contentWindow?.postMessage?.({ type: 'update', html }, new URL(frame.el.src).origin);
+    },
+
     applyPage: async ev => {
       if (ev.contents) this.state.snaps[ev.path] = JSON.parse(await ungzbase64(ev.contents));
       if (ev.cursorColors) state.designer.cursorColors = ev.cursorColors;
       if (ev.fadedCursors) state.designer.fadedCursors = ev.fadedCursors;
       let frame = state.designer.current;
       if (ev.path !== state.files.current || !frame?.ready) return;
-      if (ev.contents) frame.el?.contentWindow?.postMessage?.({ type: 'update', html: this.state.snaps[ev.path] }, new URL(frame.el.src).origin);
+      if (ev.contents && !frame.preview) frame.el?.contentWindow?.postMessage?.({ type: 'update', html: this.state.snaps[ev.path] }, new URL(frame.el.src).origin);
       frame.cursors = ev.cursors;
       await post('designer.sync', frame);
       state.event.bus.emit('collab:apply:ready', { content: !!ev.contents });
@@ -244,10 +255,11 @@ export default class Collab {
       }
       state.designer.frameWidth = ev.frameWidth;
       state.designer.frameHeight = ev.frameHeight;
-      if (onHostPage && state.designer.open && state.designer.current.preview !== ev.preview) await post('designer.togglePreview');
+      await post('designer.applyHostView', ev);
       let applyHtmlUpdate = async html => {
         this.state.snaps[ev.current] = html;
-        if (onHostPage) state.designer.current?.el?.contentWindow?.postMessage?.({ type: 'update', html }, new URL(state.designer.current.el.src).origin);
+        // A peer previewing the page runs it live; it catches up when it returns to editing (peerFrameReady).
+        if (onHostPage && !state.designer.current?.preview) state.designer.current?.el?.contentWindow?.postMessage?.({ type: 'update', html }, new URL(state.designer.current.el.src).origin);
       };
       if (ev.contents) {
         await applyHtmlUpdate(ev.contents);
@@ -322,18 +334,22 @@ export default class Collab {
     save: async ({ project, path, data }) => {
       if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
       let blob = await ungzblob(await unb64(data));
+      let isNew = !state.files.list.some(x => joinPath(x[1], x[0]) === path);
       await rfiles.save(project, path, blob);
       await post('codeEditor.externalWrite', { project, path, blob });
+      if (isNew) await peerTreeChanged(path);
     },
 
     rm: async ({ project, path }) => {
       if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
       await rfiles.rm(project, path);
+      await peerTreeChanged(path);
     },
 
     mv: async ({ project, path, newPath }) => {
       if (state.projects.current !== project) throw new Error(`Wrong project: ${project}`);
       await rfiles.mv(project, path, newPath);
+      await peerTreeChanged(path, newPath);
     },
 
     // A peer opened a file. HTML pages load as shadow editors here, so the host's own view doesn't change.
@@ -352,6 +368,21 @@ export default class Collab {
       return await post('codeEditor.exportState', { project, path });
     },
   };
+}
+
+// fast-diff costs roughly length x size of the change, so replacing a page root's markup could
+// block the editor for minutes. Diff only what lies between the common prefix and suffix, and
+// give up (null: send the full snapshot) when that middle is big.
+let MAX_DIFF_MIDDLE = 8000;
+function boundedDiff(a, b) {
+  let max = Math.min(a.length, b.length);
+  let pre = 0;
+  while (pre < max && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (suf < max - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+  let midA = a.slice(pre, a.length - suf), midB = b.slice(pre, b.length - suf);
+  if (midA.length + midB.length > MAX_DIFF_MIDDLE) return null;
+  return [...(pre ? [[0, a.slice(0, pre)]] : []), ...diff(midA, midB), ...(suf ? [[0, a.slice(a.length - suf)]] : [])];
 }
 
 function applyFastDiff(oldText, diffs) {
@@ -401,3 +432,10 @@ function unb64(base64, type = '') {
 }
 
 let simpleunb64 = str => new TextDecoder().decode(Uint8Array.from(atob(str), c => c.charCodeAt(0)));
+
+// Host: a peer created, moved or removed files. The host's own file actions refresh through
+// bus events, but these RPCs bypass them; files:load:ready then syncs the new tree to peers.
+async function peerTreeChanged(...paths) {
+  await post('files.load');
+  if (paths.some(x => x.endsWith('/') || /\.(html|js)$/.test(x))) await post('files.reflect');
+}

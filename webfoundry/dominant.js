@@ -1,7 +1,8 @@
 'use strict';
 
 let exports = {};
-if (!document.documentElement.hasAttribute('data-wf-decorating')) window.d = exports;
+// Nasty's Document has no documentElement.
+if (!document.documentElement?.hasAttribute('data-wf-decorating')) window.d = exports;
 var boundNodes = [];
 var ieNodes = navigator.userAgent.indexOf('Trident') ? [] : null;
 

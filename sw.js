@@ -53,14 +53,23 @@ self.addEventListener('fetch', ev => {
     }
     ev.respondWith((async () => {
       let cache = await caches.open('webfoundry-external');
+      // Chrome resolves a module's relative imports against the request URL when the SW hands
+      // back a redirected response (esm.run -> jsDelivr), so redirect the page to the final URL.
+      let follow = ev.request.method === 'GET' && ev.request.redirect === 'follow';
       if (ev.request.method === 'GET') {
         let cached = await cache.match(ev.request);
-        if (isUsableCachedResponse(cached)) return cached;
+        if (isUsableCachedResponse(cached)) {
+          if (follow && cached.redirected && cached.url && cached.url !== ev.request.url) return Response.redirect(cached.url, 302);
+          return cached;
+        }
       }
       try {
         let res = await fetch(ev.request);
-        if (ev.request.method === 'GET' && isCacheableResponse(res)) {
-          await cache.put(ev.request, res.clone());
+        let cacheable = ev.request.method === 'GET' && isCacheableResponse(res);
+        if (cacheable) await cache.put(ev.request, res.clone());
+        if (follow && res.redirected && res.url && res.url !== ev.request.url) {
+          if (cacheable) await cache.put(res.url, res.clone());
+          return Response.redirect(res.url, 302);
         }
         return res;
       } catch (err) {
@@ -85,7 +94,9 @@ self.addEventListener('fetch', ev => {
       try {
         const res = await fetch(ev.request);
         if (isCacheableResponse(res)) {
-          try { await cache.put(url.href, res.clone()); } catch (_) {}
+          // Not awaited: cache.put reads the whole body first, which would stall
+          // streamed downloads (e.g. the 100+ MB native runtime bundles) until done.
+          ev.waitUntil(cache.put(url.href, res.clone()).catch(() => {}));
         }
         return res;
       } catch (err) {
@@ -97,12 +108,6 @@ self.addEventListener('fetch', ev => {
     return;
   }
   if (prefix) {
-    let securityResponse = (body, init = {}) => {
-      let headers = new Headers(init.headers || {});
-      headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-      headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-      return new Response(body, { ...init, headers });
-    };
     let parts = pathname.slice(prefix.length).split('/');
     let tabId = parts.shift();
     let project = parts.shift();
@@ -114,13 +119,13 @@ self.addEventListener('fetch', ev => {
       channel.port1.onmessage = e => {
         clearTimeout(timeout);
         let { status, error, data } = e.data || {};
-        if (error) return resolve(securityResponse(error, { status }));
-        resolve(securityResponse(data, { status }));
+        if (error) return resolve(new Response(error, { status }));
+        resolve(new Response(data, { status }));
       };
       let client = await self.clients.get(await getTab(tabId));
       if (!client) return fetch(ev.request);
       client.postMessage({ type: 'fetch', project, path }, [channel.port2]);
-    }).catch(err => securityResponse(err.message, { status: 503 })));
+    }).catch(err => new Response(err.message, { status: 503 })));
     return;
   }
   /*

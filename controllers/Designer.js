@@ -91,7 +91,9 @@ export default class Designer {
       let [name, uuid] = state.projects.current.split(':');
       if (frame.preview) path = path.slice('pages/'.length);
       let fullpath = `/${frame.preview ? 'preview' : 'files'}/${sessionStorage.webfoundryTabId}/${name}:${uuid}/${path}`;
-      if (!state.settings.opt.isolate) return fullpath;
+      // Hardened isolation: the project origin's service worker adds COOP/COEP when it sees coi=1.
+      let coi = state.settings.opt.coi ? 'coi=1' : '';
+      if (!state.settings.opt.isolate) return coi ? `${fullpath}?${coi}` : fullpath;
       let sub = isolationLabel(state.projects.current);
       let host = location.hostname;
       let parts = host.split('.');
@@ -102,7 +104,7 @@ export default class Designer {
       else if (/\.webfoundry\.app$/i.test(host)) root = parts.slice(-2).join('.');
       else root = parts.slice(-2).join('.');
       if (location.port) root += `:${location.port}`;
-      return `${location.protocol}//${sub}.${root}${fullpath}?isolate=${location.origin}`;
+      return `${location.protocol}//${sub}.${root}${fullpath}?isolate=${location.origin}${coi ? '&' + coi : ''}`;
     },
 
     get current() { return this.list.find(x => x.path === state.files.current) },

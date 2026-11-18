@@ -9,6 +9,47 @@ async function getTab(tabId) {
   let res = await cache.match(tabId);
   return res && await res.text();
 }
+// Hardened isolation (Settings → "Hardened isolation"): when on, documents get
+// COOP/COEP so pages are cross-origin isolated (SharedArrayBuffer, Atomics.wait).
+// The flag lives in the Cache API because a service worker can't read
+// localStorage. Preview iframes on project origins opt in with ?coi=1 instead,
+// since each origin has its own service worker and caches.
+let coiFlag = null;
+async function coiEnabled() {
+  if (coiFlag != null) return coiFlag;
+  try {
+    let res = await (await caches.open('webfoundry-settings')).match('/__wf/coi');
+    coiFlag = res ? (await res.text()) === '1' : false;
+  } catch {
+    coiFlag = false;
+  }
+  return coiFlag;
+}
+// Load the flag as soon as the worker starts: the fetch handler needs it synchronously.
+coiEnabled();
+async function setCoi(on) {
+  coiFlag = !!on;
+  await (await caches.open('webfoundry-settings')).put('/__wf/coi', new Response(on ? '1' : '0'));
+}
+// Safari has no COEP credentialless; require-corp still isolates but blocks hotlinks without CORP.
+let coepValue = /Safari\//.test(navigator.userAgent) && !/Chrome\/|Chromium\/|Firefox\//.test(navigator.userAgent) ? 'require-corp' : 'credentialless';
+function coiHeaders(headers) {
+  let h = new Headers(headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', coepValue);
+  h.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  return h;
+}
+function withCoi(res) {
+  if (!res || res.type === 'opaqueredirect' || res.type === 'opaque' || res.status === 0) return res;
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: coiHeaders(res.headers) });
+}
+async function wantsCoi(url, clientId) {
+  if (url.searchParams.get('coi') === '1' || (await coiEnabled())) return true;
+  if (!clientId) return false;
+  let client = await self.clients.get(clientId).catch(() => null);
+  return !!client && new URL(client.url).searchParams.get('coi') === '1';
+}
 function isCacheableResponse(res) {
   return (
     res &&
@@ -22,7 +63,12 @@ function isUsableCachedResponse(res) {
 }
 self.addEventListener('message', async ev => {
   let { data } = ev;
-  if (data.type !== 'webfoundry-register-tab') return;
+  if (data?.type === 'webfoundry-coi') {
+    await setCoi(data.on);
+    ev.ports?.[0]?.postMessage({ type: 'webfoundry-coi:ok', on: coiFlag });
+    return;
+  }
+  if (data?.type !== 'webfoundry-register-tab') return;
   await storeTab(data.tabId, ev.source.id);
 });
 self.addEventListener('fetch', ev => {
@@ -30,15 +76,21 @@ self.addEventListener('fetch', ev => {
   if (ev.request.mode === 'navigate') {
     ev.respondWith((async () => {
       let cache = await caches.open('webfoundry-pages');
+      // Project preview frames (?isolate=…) carry the editor's mode as ?coi=1; remember it for
+      // this origin so subresource requests can be routed synchronously.
+      if (url.searchParams.get('isolate') != null && coiFlag !== (url.searchParams.get('coi') === '1')) {
+        await setCoi(url.searchParams.get('coi') === '1');
+      }
+      let coi = await wantsCoi(url);
       try {
         let res = await fetch(ev.request);
         if (ev.request.method === 'GET' && isCacheableResponse(res)) {
           try { await cache.put(url.href, res.clone()); } catch (_) {}
         }
-        return res;
+        return coi ? withCoi(res) : res;
       } catch (err) {
         let cached = await cache.match(url.href);
-        if (isUsableCachedResponse(cached)) return cached;
+        if (isUsableCachedResponse(cached)) return coi ? withCoi(cached) : cached;
         throw err;
       }
     })());
@@ -46,6 +98,10 @@ self.addEventListener('fetch', ev => {
   }
   if (url.searchParams.get('isolate') != null) return;
   if (url.origin !== self.location.origin) {
+    // Hardened isolation: let the browser fetch cross-origin resources itself. Firefox rejects
+    // fetch(event.request) from isolated clients (InvalidStateError), and the browser applies
+    // COEP credentialless correctly only to its own fetches. Unknown flag (worker just started) → same.
+    if (coiFlag !== false) return;
     // Never cache Netlify API responses; they are dynamic and polled for freshness
     if (url.hostname === 'api.netlify.com') {
       ev.respondWith(fetch(ev.request));
@@ -53,12 +109,14 @@ self.addEventListener('fetch', ev => {
     }
     ev.respondWith((async () => {
       let cache = await caches.open('webfoundry-external');
+      // An opaque (no-cors) cached copy can't answer a CORS request (e.g. <link crossorigin>).
+      let fits = res => isUsableCachedResponse(res) && !(ev.request.mode !== 'no-cors' && res.type === 'opaque');
       // Chrome resolves a module's relative imports against the request URL when the SW hands
       // back a redirected response (esm.run -> jsDelivr), so redirect the page to the final URL.
       let follow = ev.request.method === 'GET' && ev.request.redirect === 'follow';
       if (ev.request.method === 'GET') {
         let cached = await cache.match(ev.request);
-        if (isUsableCachedResponse(cached)) {
+        if (fits(cached)) {
           if (follow && cached.redirected && cached.url && cached.url !== ev.request.url) return Response.redirect(cached.url, 302);
           return cached;
         }
@@ -75,7 +133,7 @@ self.addEventListener('fetch', ev => {
       } catch (err) {
         if (ev.request.method === 'GET') {
           let fallback = await cache.match(ev.request);
-          if (isUsableCachedResponse(fallback)) return fallback;
+          if (fits(fallback)) return fallback;
         }
         if (url.origin.includes('clarity.ms')) return new Response('');
         throw err;
@@ -116,11 +174,14 @@ self.addEventListener('fetch', ev => {
     ev.respondWith(new Promise(async (resolve, reject) => {
       let channel = new MessageChannel();
       let timeout = setTimeout(() => reject(new Error('Request timeout')), 30000);
+      // Project files fetched by an isolated page (e.g. Worker scripts) carry COEP/CORP too.
+      let coi = await wantsCoi(url, ev.clientId);
       channel.port1.onmessage = e => {
         clearTimeout(timeout);
         let { status, error, data } = e.data || {};
-        if (error) return resolve(new Response(error, { status }));
-        resolve(new Response(data, { status }));
+        let headers = coi ? coiHeaders() : undefined;
+        if (error) return resolve(new Response(error, { status, headers }));
+        resolve(new Response(data, { status, headers }));
       };
       let client = await self.clients.get(await getTab(tabId));
       if (!client) return fetch(ev.request);

@@ -45,6 +45,7 @@ window.wfProjectUrl ??= path => {
       let link = document.createElement('link');
       link.id = id;
       link.rel = 'stylesheet';
+      link.crossOrigin = 'anonymous';
       link.href =
         'https://fonts.googleapis.com/css2?family=' +
         encodeURIComponent(x.replace(/_/g, ' ')).replace(/%20/g, '+') +
@@ -113,6 +114,9 @@ window.wfProjectUrl ??= path => {
     let link = document.createElement('link');
     link.className = 'wf-nf-link';
     link.rel = 'stylesheet';
+    // CORS request: nerdfonts.com sends ACAO * but no CORP, so a no-cors <link>
+    // is blocked on cross-origin-isolated pages (Settings → Hardened isolation).
+    link.crossOrigin = 'anonymous';
     link.href = 'https://www.nerdfonts.com/assets/css/webfont.css';
     let plink = Promise.withResolvers();
     link.onload = () => plink.resolve('nf');
@@ -178,6 +182,7 @@ window.wfProjectUrl ??= path => {
             let link = document.createElement('link');
             link.className = 'wf-material-fonts';
             link.rel = 'stylesheet';
+            link.crossOrigin = 'anonymous';
             link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap';
             document.head.append(link);
           }

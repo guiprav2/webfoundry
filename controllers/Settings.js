@@ -31,6 +31,8 @@ export default class Settings {
         };
         await post('settings.save');
       }
+      // Keep the service worker's copy of the hardened-isolation flag in sync (it can't read localStorage).
+      await post('settings.syncCoi');
       document.body.classList.add('bg-cover', 'bg-center');
       if (this.state.opt.wallpaper) document.body.style.backgroundImage = `url("${state.settings.opt.wallpaper}")`;
       if (state.collab.uid !== 'master') return;
@@ -93,6 +95,39 @@ export default class Settings {
     },
 
     save: () => localStorage.setItem('webfoundry:config', JSON.stringify(this.state.opt)),
+
+    /** Tell the service worker whether to send COOP/COEP (resolves once it has stored the flag). */
+    syncCoi: async () => {
+      let sw = navigator.serviceWorker?.controller;
+      if (!sw) return;
+      await new Promise(resolve => {
+        let channel = new MessageChannel();
+        let done = setTimeout(resolve, 2000);
+        channel.port1.onmessage = () => {
+          clearTimeout(done);
+          resolve();
+        };
+        sw.postMessage({ type: 'webfoundry-coi', on: !!this.state.opt.coi }, [channel.port2]);
+      });
+    },
+
+    /**
+     * Hardened isolation: COOP same-origin + COEP credentialless on every page,
+     * making the editor and previews cross-origin isolated (SharedArrayBuffer,
+     * Atomics.wait). Applied by the service worker, so it takes a reload.
+     */
+    toggleCoi: async () => {
+      let on = !this.state.opt.coi;
+      let message = on
+        ? 'Webfoundry will reload with cross-origin isolation on. Images, media and embeds from sites that do not allow it may stop loading, and cross-site popups (e.g. sign-in windows) lose their link to this tab. Other Webfoundry tabs switch on their next reload.'
+        : 'Webfoundry will reload without cross-origin isolation. Pages that rely on SharedArrayBuffer or Atomics.wait will stop working.';
+      let [btn] = await showModal('ConfirmationDialog', { title: on ? 'Turn on hardened isolation?' : 'Turn off hardened isolation?', message });
+      if (btn !== 'yes') return;
+      this.state.opt.coi = on;
+      await post('settings.save');
+      await post('settings.syncCoi');
+      location.reload();
+    },
 
     option: async (k, v, force) => {
       v ??= !this.state.opt[k];
